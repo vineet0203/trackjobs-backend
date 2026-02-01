@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Notifications\DeploymentStatusNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Artisan;
@@ -14,6 +15,7 @@ use App\Services\TelegramService;
 use App\Traits\TracksRequestAnalytics;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 
 class DeploymentController extends Controller
@@ -293,7 +295,7 @@ class DeploymentController extends Controller
     }
 
     /**
-     * 2. Send deployment notifications
+     * Send deployment notifications
      */
     private function sendDeploymentNotification(array $payload, array $output, bool $success, float $duration, ?string $backupPath = null, ?string $error = null): void
     {
@@ -313,8 +315,10 @@ class DeploymentController extends Controller
                 'duration' => $duration,
                 'timestamp' => now()->toDateTimeString(),
                 'error' => $error,
-                'backup' => $backupPath,
+                'backup' => $backupPath ? 'Created' : ($success ? 'Skipped' : 'Not created'),
                 'environment' => app()->environment(),
+                'steps_completed' => count($output),
+                'migration_status' => $backupPath ? 'executed' : 'pretend_mode',
             ];
 
             // 1. Log to file
@@ -324,14 +328,126 @@ class DeploymentController extends Controller
             );
 
             // 2. Send Telegram notification
-            $telegram = new TelegramService();
-            $telegram->sendDeploymentAlert($notificationData);
+            if (class_exists(TelegramService::class)) {
+                try {
+                    $telegram = new TelegramService();
+                    $telegram->sendDeploymentAlert($notificationData);
+                } catch (\Exception $e) {
+                    Log::warning('Telegram notification failed', ['error' => $e->getMessage()]);
+                }
+            }
 
-            // 3. Optional: Also log to database for analytics
+            // 3. Send Email notification using Notification class
+            $this->sendDeploymentEmailNotification($notificationData);
+
+            // 4. Optional: Also log to database for analytics
             $this->logDeploymentToDatabase($notificationData);
         } catch (\Exception $e) {
-            Log::error('Notification failed', ['error' => $e->getMessage()]);
+            Log::error('Notification system failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Send deployment notifications
+     */
+    private function sendDeploymentNotification(array $payload, array $output, bool $success, float $duration, ?string $backupPath = null, ?string $error = null): void
+    {
+        try {
+            $notificationData = [
+                'success' => $success,
+                'commit' => [
+                    'id' => $payload['head_commit']['id'] ?? 'unknown',
+                    'message' => $payload['head_commit']['message'] ?? 'no message',
+                    'author' => $payload['pusher']['name'] ?? 'unknown',
+                    'url' => $payload['head_commit']['url'] ?? null,
+                ],
+                'repository' => [
+                    'name' => $payload['repository']['full_name'] ?? 'unknown',
+                    'url' => $payload['repository']['html_url'] ?? null,
+                ],
+                'duration' => $duration,
+                'timestamp' => now()->toDateTimeString(),
+                'error' => $error,
+                'backup' => $backupPath ? 'Created' : ($success ? 'Skipped' : 'Not created'),
+                'environment' => app()->environment(),
+                'steps_completed' => count($output),
+                'migration_status' => $backupPath ? 'executed' : 'pretend_mode',
+            ];
+
+            // 1. Log to file
+            Log::channel('deployments')->info(
+                $success ? '✅ Deployment successful' : '❌ Deployment failed',
+                $notificationData
+            );
+
+            // 2. Send Telegram notification
+            if (class_exists(TelegramService::class)) {
+                try {
+                    $telegram = new TelegramService();
+                    $telegram->sendDeploymentAlert($notificationData);
+                } catch (\Exception $e) {
+                    Log::warning('Telegram notification failed', ['error' => $e->getMessage()]);
+                }
+            }
+
+            // 3. Send Email notification using Notification class
+            $this->sendDeploymentEmailNotification($notificationData);
+
+            // 4. Optional: Also log to database for analytics
+            $this->logDeploymentToDatabase($notificationData);
+        } catch (\Exception $e) {
+            Log::error('Notification system failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Send deployment email notification
+     */
+    private function sendDeploymentEmailNotification(array $notificationData): void
+    {
+        try {
+            // Get recipients from config or env
+            $recipients = $this->getDeploymentRecipients();
+
+            if (empty($recipients)) {
+                Log::info('No deployment email recipients configured');
+                return;
+            }
+
+            foreach ($recipients as $recipient) {
+                // Send to email address directly (not using User model)
+                Notification::route('mail', $recipient)
+                    ->notify(new DeploymentStatusNotification($notificationData));
+            }
+
+            Log::info('Deployment email notifications sent', [
+                'recipients_count' => count($recipients),
+                'success' => $notificationData['success'],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send deployment email notification', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Get deployment notification recipients
+     */
+    private function getDeploymentRecipients(): array
+    {
+        // Get from config or env
+        $recipients = config('deployment.notification_emails', []);
+
+        // Single email fallback
+        if (empty($recipients)) {
+            $singleEmail = env('DEPLOYMENT_NOTIFICATION_EMAIL');
+            if ($singleEmail) {
+                $recipients = [$singleEmail];
+            }
+        }
+
+        return array_filter($recipients);
     }
 
 

@@ -294,58 +294,6 @@ class DeploymentController extends Controller
         }
     }
 
-    /**
-     * Send deployment notifications
-     */
-    private function sendDeploymentNotification(array $payload, array $output, bool $success, float $duration, ?string $backupPath = null, ?string $error = null): void
-    {
-        try {
-            $notificationData = [
-                'success' => $success,
-                'commit' => [
-                    'id' => $payload['head_commit']['id'] ?? 'unknown',
-                    'message' => $payload['head_commit']['message'] ?? 'no message',
-                    'author' => $payload['pusher']['name'] ?? 'unknown',
-                    'url' => $payload['head_commit']['url'] ?? null,
-                ],
-                'repository' => [
-                    'name' => $payload['repository']['full_name'] ?? 'unknown',
-                    'url' => $payload['repository']['html_url'] ?? null,
-                ],
-                'duration' => $duration,
-                'timestamp' => now()->toDateTimeString(),
-                'error' => $error,
-                'backup' => $backupPath ? 'Created' : ($success ? 'Skipped' : 'Not created'),
-                'environment' => app()->environment(),
-                'steps_completed' => count($output),
-                'migration_status' => $backupPath ? 'executed' : 'pretend_mode',
-            ];
-
-            // 1. Log to file
-            Log::channel('deployments')->info(
-                $success ? '✅ Deployment successful' : '❌ Deployment failed',
-                $notificationData
-            );
-
-            // 2. Send Telegram notification
-            if (class_exists(TelegramService::class)) {
-                try {
-                    $telegram = new TelegramService();
-                    $telegram->sendDeploymentAlert($notificationData);
-                } catch (\Exception $e) {
-                    Log::warning('Telegram notification failed', ['error' => $e->getMessage()]);
-                }
-            }
-
-            // 3. Send Email notification using Notification class
-            $this->sendDeploymentEmailNotification($notificationData);
-
-            // 4. Optional: Also log to database for analytics
-            $this->logDeploymentToDatabase($notificationData);
-        } catch (\Exception $e) {
-            Log::error('Notification system failed', ['error' => $e->getMessage()]);
-        }
-    }
 
     /**
      * Send deployment notifications

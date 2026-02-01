@@ -26,12 +26,12 @@ class VerifyGitHubWebhook
         }
 
         // 2. Get secret with validation
-        $secret = env('GITHUB_WEBHOOK_SECRET');
-        
+        $secret = config('github.webhook.secret');
+
         if (empty($secret)) {
             return $this->logAndRespond('Secret not configured', 500);
         }
-        
+
         // Log secret info (without exposing it)
         Log::debug('Secret info', [
             'secret_length' => strlen($secret),
@@ -40,7 +40,7 @@ class VerifyGitHubWebhook
 
         // 3. Get signature
         $signature = $request->header('X-Hub-Signature-256');
-        
+
         if (empty($signature)) {
             return $this->logAndRespond('Missing signature', 400, [
                 'available_headers' => array_keys($request->headers->all()),
@@ -50,10 +50,10 @@ class VerifyGitHubWebhook
         // 4. Get raw payload - using multiple methods for reliability
         $payload1 = $request->getContent();
         $payload2 = file_get_contents('php://input');
-        
+
         // Use the longer one (GitHub sends raw)
         $payload = strlen($payload1) > strlen($payload2) ? $payload1 : $payload2;
-        
+
         if (empty($payload)) {
             return $this->logAndRespond('Empty payload', 400, [
                 'payload1_length' => strlen($payload1),
@@ -63,7 +63,7 @@ class VerifyGitHubWebhook
 
         // 5. Calculate hash
         $hash = 'sha256=' . hash_hmac('sha256', $payload, $secret);
-        
+
         // 6. Verify with detailed comparison
         if (!hash_equals($hash, $signature)) {
             // Log EVERYTHING for debugging
@@ -79,7 +79,7 @@ class VerifyGitHubWebhook
                 'signature_match' => $signature === $hash,
                 'timing' => now()->format('Y-m-d H:i:s.u'),
             ]);
-            
+
             return response()->json(['error' => 'Invalid signature'], 403);
         }
 

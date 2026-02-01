@@ -152,7 +152,7 @@ class DeploymentController extends Controller
 
         // 2. Create backup
         $backupPath = null;
-        if (env('ENABLE_DEPLOYMENT_BACKUPS', true)) {
+        if (config('github.deployment.enable_backups', true)) {
             $backupPath = $this->createBackup();
         }
 
@@ -185,10 +185,9 @@ class DeploymentController extends Controller
             $output[] = 'Migrations: ' . Artisan::output();
 
             // 5. Clear caches
-            Artisan::call('config:cache');
-            Artisan::call('route:cache');
-            Artisan::call('view:cache');
-            Artisan::call('optimize');
+            Artisan::call('cache:clear');
+            Artisan::call('route:clear');
+            Artisan::call('view:clear');
 
             // 6. Additional steps
             $output[] = $this->executeCommand(['php', 'artisan', 'storage:link'], 'Storage link');
@@ -233,7 +232,7 @@ class DeploymentController extends Controller
             $this->logDeploymentStats($payload, $output, false, $duration);
 
             // 11. Attempt rollback if backup exists
-            if ($backupPath && env('ENABLE_AUTO_ROLLBACK', false)) {
+            if ($backupPath && config('github.deployment.enable_auto_rollback', false)) {
                 $this->attemptRollback($backupPath, $e->getMessage());
             }
 
@@ -723,7 +722,7 @@ class DeploymentController extends Controller
         if (app()->environment('production')) {
             // Check for admin role or specific token
             $token = $request->header('X-Deployment-Token');
-            $validToken = env('DEPLOYMENT_TOKEN');
+            $validToken = config('github.deployment.token');
 
             if (!$token || $token !== $validToken) {
                 Log::warning('Unauthorized manual deploy attempt', [

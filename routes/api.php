@@ -96,7 +96,7 @@ Route::prefix('webhooks')->group(function () {
         ->middleware(['throttle:10,1', 'github-webhook']);
 
     Route::post('/manual-deploy', [DeploymentController::class, 'manualDeploy'])
-        ->middleware('throttle:3,5');
+        ->middleware('throttle:5,1');
 
     // rollback endpoint
     Route::post('/rollback', [DeploymentController::class, 'rollback'])

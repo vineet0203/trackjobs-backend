@@ -44,14 +44,6 @@ class DeploymentController extends Controller
             return response()->json(['error' => 'IP not allowed'], 403);
         }
 
-        // 2. Verify GitHub signature
-        // if (!$this->verifyGitHubSignature($request)) {
-        //     Log::warning('Invalid GitHub webhook signature', [
-        //         'ip' => $request->ip(),
-        //         'signature' => $request->header('X-Hub-Signature-256'),
-        //     ]);
-        //     return response()->json(['error' => 'Invalid signature'], 403);
-        // }
 
         $event = $request->header('X-GitHub-Event');
         $payload = $request->json()->all();
@@ -140,28 +132,6 @@ class DeploymentController extends Controller
         return ($ip & $mask) === ($subnet & $mask);
     }
 
-    /**
-     * Verify GitHub webhook signature
-     */
-    private function verifyGitHubSignature(Request $request): bool
-    {
-        $secret = env('GITHUB_WEBHOOK_SECRET');
-
-        if (empty($secret)) {
-            Log::error('GITHUB_WEBHOOK_SECRET is not set in .env');
-            return false;
-        }
-
-        $signature = $request->header('X-Hub-Signature-256');
-        $payload = $request->getContent();
-
-        if (empty($signature)) {
-            return false;
-        }
-
-        $hash = 'sha256=' . hash_hmac('sha256', $payload, $secret);
-        return hash_equals($hash, $signature);
-    }
 
 
     /**

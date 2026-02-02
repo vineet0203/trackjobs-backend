@@ -29,7 +29,7 @@ return [
     |
     */
 
-    'env' => env('APP_ENV', 'production'),
+    'env' => env('APP_ENV', 'development'),
 
     /*
     |--------------------------------------------------------------------------
@@ -55,9 +55,20 @@ return [
     |
     */
 
-    'url' => env('APP_URL', 'http://localhost'),
+    'url' => env('APP_URL', 'http://localhost:5173'),
 
     'asset_url' => env('ASSET_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Frontend URLs
+    |--------------------------------------------------------------------------
+    |
+    | URLs for the frontend application
+    |
+    */
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+    'frontend_password_reset_url' => env('FRONTEND_PASSWORD_RESET_URL', null),
 
     /*
     |--------------------------------------------------------------------------

@@ -21,9 +21,10 @@ Route::middleware(['api'])->group(function () {
         ]);
     });
 
+
     // Get analytics for specific IP
     Route::get('/analytics/ip/{ip}', function (string $ip) {
-        $request = new \Illuminate\Http\Request();
+        $request = new Request();
         $request->server->set('REMOTE_ADDR', $ip);
 
         $analytics = new RequestAnalyticsService($request);
@@ -37,15 +38,19 @@ Route::middleware(['api'])->group(function () {
     });
 });
 
+
+
+// <<==================== Actual Api Endpoints ===================>>
+
 // Public authentication routes
 Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register'])->name('auth.register');
     Route::post('login', [AuthController::class, 'login'])->name('auth.login');
     Route::post('refresh', [AuthController::class, 'refresh'])->name('auth.refresh');
-    Route::post('forgot-password', [AuthController::class, 'sendPasswordResetLink'])->name('auth.forgot-password');
-    Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('auth.reset-password');
-    Route::post('email/verify', [AuthController::class, 'verifyEmail'])->name('auth.verify-email');
-    Route::post('email/resend', [AuthController::class, 'resendVerification'])->name('auth.resend-verification');
+    // Password reset flow
+    Route::post('password/forgot', [AuthController::class, 'forgotPassword'])->name('auth.forgot-password');
+    Route::post('password/reset', [AuthController::class, 'resetPassword'])->name('auth.reset-password');
+    Route::post('password/verify-token', [AuthController::class, 'verifyResetToken'])->name('auth.verify-email');
 });
 
 

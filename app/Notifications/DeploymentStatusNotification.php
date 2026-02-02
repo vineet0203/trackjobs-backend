@@ -13,13 +13,13 @@ class DeploymentStatusNotification extends Notification implements ShouldQueue
 
     public $tries;
     public $timeout;
-    
+
     protected $deploymentData;
 
     public function __construct(array $deploymentData)
     {
         $this->deploymentData = $deploymentData;
-        
+
         $this->tries = config('notifications.tries', 3);
         $this->timeout = config('notifications.timeout', 30);
     }
@@ -45,10 +45,10 @@ class DeploymentStatusNotification extends Notification implements ShouldQueue
     {
         $appName = config('app.name', 'TrackJobs');
         $environment = $this->deploymentData['environment'] ?? app()->environment();
-        
-        $subject = $this->deploymentData['success'] 
-            ? '✅ Deployment Successful - ' . $appName . ' (' . $environment . ')'
-            : '❌ Deployment Failed - ' . $appName . ' (' . $environment . ')';
+
+        $subject = $this->deploymentData['success']
+            ? 'Deployment Successful - ' . $appName . ' (' . $environment . ')'
+            : 'Deployment Failed - ' . $appName . ' (' . $environment . ')';
 
         return (new MailMessage)
             ->subject($subject)

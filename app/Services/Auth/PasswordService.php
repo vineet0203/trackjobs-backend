@@ -7,6 +7,8 @@ use App\Models\PasswordSecuritySetting;
 use App\Models\User;
 use App\Models\UserSecurityLog;
 use App\Notifications\PasswordChangedNotification;
+use App\Notifications\PasswordResetNotification;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -40,17 +42,7 @@ class PasswordService
         }
 
         // Shuffle the password to randomize character positions
-        $password = str_shuffle($password);
-
-        return $password;
-    }
-
-    /**
-     * Generate a simple random password (basic version, similar to Str::random)
-     */
-    public function generateSimpleRandomPassword(int $length = 12): string
-    {
-        return Str::random($length);
+        return str_shuffle($password);
     }
 
     /**
@@ -83,28 +75,7 @@ class PasswordService
             'attempts' => $attempts
         ]);
 
-        return $this->generateSimpleRandomPassword($length);
-    }
-
-    /**
-     * Generate a temporary password for new users or password resets
-     */
-    public function generateTemporaryPassword(?User $user = null, int $length = 12): string
-    {
-        if ($user) {
-            // Try to generate a password that meets user's security requirements
-            try {
-                return $this->generateSecurePassword($user, $length);
-            } catch (\Exception $e) {
-                Log::warning('Failed to generate secure password for user, using fallback', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage()
-                ]);
-            }
-        }
-
-        // Fallback: generate a secure random password
-        return $this->generateRandomPassword($length);
+        return Str::random($length);
     }
 
     /**
@@ -118,12 +89,8 @@ class PasswordService
             // Generate a new password
             $newPassword = $this->generateSecurePassword($user);
 
-            // Update password with history tracking
-            $success = $this->updatePasswordWithHistory($user, $newPassword);
-
-            if (!$success) {
-                throw new \Exception('Failed to update password');
-            }
+            // Update password
+            $this->updatePasswordWithHistory($user, $newPassword);
 
             // Set force password change if required
             if ($forceChange) {
@@ -155,44 +122,27 @@ class PasswordService
     }
 
     /**
-     * Generate a password reset token and optionally send email
+     * Generate a password reset token
      */
-    public function generatePasswordResetToken(User $user, bool $sendEmail = true): array
+    public function generatePasswordResetToken(User $user): array
     {
         try {
-            // Generate a secure random password
-            $temporaryPassword = $this->generateSecurePassword($user);
-
-            // Create password reset record (you might have a PasswordReset model)
-            $token = Str::random(60);
+            // Use Laravel's built-in token generation
+            $token = app('auth.password.broker')->createToken($user);
             $expiresAt = now()->addHours(24);
-
-            // Here you would typically save to password_resets table
-            // For now, we'll just generate the response
 
             $response = [
                 'success' => true,
                 'token' => $token,
                 'expires_at' => $expiresAt,
-                'temporary_password' => $sendEmail ? null : $temporaryPassword, // Don't expose if sending email
                 'user_id' => $user->id,
                 'email' => $user->email
             ];
 
-            if ($sendEmail) {
-                // Send password reset email with the token
-                $this->sendPasswordResetEmail($user, $token, $temporaryPassword);
-
-                Log::info('Password reset token generated and email sent', [
-                    'user_id' => $user->id,
-                    'email' => $user->email
-                ]);
-            } else {
-                Log::info('Password reset token generated', [
-                    'user_id' => $user->id,
-                    'email' => $user->email
-                ]);
-            }
+            Log::info('Password reset token generated', [
+                'user_id' => $user->id,
+                'email' => $user->email
+            ]);
 
             return $response;
         } catch (\Exception $e) {
@@ -208,20 +158,25 @@ class PasswordService
     /**
      * Send password reset email
      */
-    private function sendPasswordResetEmail(User $user, string $token, string $temporaryPassword): void
+    public function sendPasswordResetEmail(User $user, string $token): void
     {
-        // Implementation depends on your email setup
-        // You would typically dispatch a job here
+        try {
+            // Send notification
+            $user->notify(new PasswordResetNotification($user, $token));
 
-        Log::info('Password reset email should be sent', [
-            'user_id' => $user->id,
-            'email' => $user->email,
-            'token' => $token,
-            'has_temp_password' => !empty($temporaryPassword)
-        ]);
+            Log::info('Password reset email sent', [
+                'user_id' => $user->id,
+                'email' => $user->email
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send password reset email', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage()
+            ]);
 
-        // Example:
-        // PasswordResetNotification::dispatch($user, $token, $temporaryPassword);
+            throw $e;
+        }
     }
 
     /**
@@ -292,41 +247,96 @@ class PasswordService
     }
 
     /**
-     * Update password with history tracking
+     * Update password with history tracking (Central method for all password updates)
      */
-    public function updatePasswordWithHistory(User $user, string $newPassword): bool
+    public function updatePasswordWithHistory(User $user, string $newPassword, string $changeMethod = 'manual'): bool
     {
-        // Store current password in history before changing
-        PasswordHistory::create([
-            'user_id' => $user->id,
-            'password_hash' => $user->password,
-            'changed_by' => $user->id,
-            'ip_address' => request()->ip(),
-            'user_agent' => request()->userAgent()
-        ]);
+        try {
+            // Store current password in history before changing
+            $this->storePasswordHistory($user);
 
-        // Update password
-        $user->password = Hash::make($newPassword);
-        $user->password_changed_at = now();
-        $user->force_password_change = false;
-        $user->failed_login_attempts = 0; // Reset failed attempts
+            // Update password
+            $user->password = Hash::make($newPassword);
+            $user->password_changed_at = now();
+            $user->force_password_change = false;
+            $user->failed_login_attempts = 0; // Reset failed attempts
+            $user->account_locked_until = null; // Unlock account if it was locked
 
-        $success = $user->save();
+            $success = $user->save();
 
-        if ($success) {
-            // Log password change
-            UserSecurityLog::logEvent($user, 'password_changed', [
-                'ip_address' => request()->ip(),
-                'user_agent' => request()->userAgent()
+            if ($success) {
+                // Log password change
+                UserSecurityLog::logEvent($user, 'password_changed', [
+                    'ip_address' => request()->ip(),
+                    'user_agent' => request()->userAgent(),
+                    'metadata' => json_encode([
+                        'change_method' => $changeMethod,
+                        'source' => 'password_update'
+                    ])
+                ]);
+
+                // Send password change notification if enabled
+                if ($this->getSecuritySettings($user)['notify_on_password_change']) {
+                    $this->sendPasswordChangeNotification($user);
+                }
+
+                Log::info('Password updated successfully', [
+                    'user_id' => $user->id,
+                    'password_changed_at' => $user->password_changed_at,
+                    'ip_address' => request()->ip(),
+                    'change_method' => $changeMethod
+                ]);
+            }
+
+            return $success;
+        } catch (\Exception $e) {
+            Log::error('Failed to update password with history', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
             ]);
 
-            // Send notification if enabled
-            if ($this->getSecuritySettings($user)['notify_on_password_change']) {
-                $this->sendPasswordChangeNotification($user);
-            }
+            throw $e;
         }
+    }
 
-        return $success;
+    /**
+     * Store current password in history
+     */
+    private function storePasswordHistory(User $user): void
+    {
+        try {
+            // Create password history entry
+            PasswordHistory::create([
+                'user_id' => $user->id,
+                'password_hash' => $user->password,
+                'changed_by' => $user->id,
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'changed_at' => now()
+            ]);
+
+            // Clean up old password history based on settings
+            $settings = $this->getSecuritySettings($user);
+            $historySize = $settings['password_history_size'] ?? 5;
+
+            if ($historySize > 0) {
+                // Delete old entries beyond the history size
+                $oldHistories = PasswordHistory::where('user_id', $user->id)
+                    ->orderBy('changed_at', 'desc')
+                    ->skip($historySize)
+                    ->pluck('id');
+
+                if ($oldHistories->isNotEmpty()) {
+                    PasswordHistory::whereIn('id', $oldHistories)->delete();
+                }
+            }
+        } catch (\Exception $e) {
+            // Don't fail the password update if history logging fails
+            Log::warning('Failed to store password history', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**
@@ -397,19 +407,7 @@ class PasswordService
             }
 
             // Update password with history tracking
-            $success = $this->updatePasswordWithHistory($user, $data['new_password']);
-
-            if (!$success) {
-                throw new \Exception('Failed to update password');
-            }
-
-            Log::info('Password updated successfully', [
-                'user_id' => $user->id,
-                'password_changed_at' => $user->password_changed_at,
-                'ip_address' => request()->ip()
-            ]);
-
-            return true;
+            return $this->updatePasswordWithHistory($user, $data['new_password'], 'manual_change');
         } catch (\Exception $e) {
             Log::error('Failed to update password', [
                 'user_id' => $user->id,
@@ -441,19 +439,7 @@ class PasswordService
             }
 
             // Update password with history tracking
-            $success = $this->updatePasswordWithHistory($user, $newPassword);
-
-            if (!$success) {
-                throw new \Exception('Failed to change password');
-            }
-
-            Log::info('Force password change successful', [
-                'user_id' => $user->id,
-                'password_changed_at' => $user->password_changed_at,
-                'ip_address' => request()->ip()
-            ]);
-
-            return true;
+            return $this->updatePasswordWithHistory($user, $newPassword, 'force_change');
         } catch (\Exception $e) {
             Log::error('Force password change failed', [
                 'user_id' => $user->id,
@@ -462,6 +448,137 @@ class PasswordService
 
             throw $e;
         }
+    }
+
+    /**
+     * Reset password using token with comprehensive logging
+     */
+    public function resetPasswordWithToken(User $user, string $newPassword, string $token = null): bool
+    {
+        try {
+            Log::info('Processing password reset with token', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'ip' => request()->ip(),
+                'has_token' => !empty($token)
+            ]);
+
+            // Log the reset attempt
+            UserSecurityLog::logEvent($user, 'password_reset_requested', [
+                'ip_address' => request()->ip(),
+                'user_agent' => request()->userAgent(),
+                'metadata' => json_encode([
+                    'reset_method' => 'token',
+                    'reset_type' => 'self_service',
+                    'token_provided' => !empty($token)
+                ])
+            ]);
+
+            // Validate new password against security requirements
+            $validationErrors = $this->validatePasswordWithHistory($user, $newPassword);
+
+            if (!empty($validationErrors)) {
+                $errorMessage = implode(' ', $validationErrors);
+
+                Log::warning('Password reset failed - password validation failed', [
+                    'user_id' => $user->id,
+                    'errors' => $validationErrors,
+                    'ip' => request()->ip()
+                ]);
+
+                UserSecurityLog::logEvent($user, 'suspicious_activity', [
+                    'ip_address' => request()->ip(),
+                    'user_agent' => request()->userAgent(),
+                    'metadata' => json_encode([
+                        'event' => 'password_reset_validation_failed',
+                        'errors' => $validationErrors
+                    ])
+                ]);
+
+                throw new \Exception($errorMessage);
+            }
+
+            // Verify token if provided (for additional security in manual resets)
+            if ($token && !$this->validatePasswordResetToken($user, $token)) {
+                Log::warning('Invalid password reset token', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'ip' => request()->ip()
+                ]);
+
+                throw new \Exception('Invalid or expired reset token');
+            }
+
+            // Update password with history tracking
+            $success = $this->updatePasswordWithHistory($user, $newPassword, 'reset_token');
+
+            if ($success && $token) {
+                // Delete the used reset token from Laravel's password_reset_tokens table
+                DB::table('password_reset_tokens')
+                    ->where('email', $user->email)
+                    ->delete();
+
+                Log::debug('Password reset token deleted after successful use', [
+                    'user_id' => $user->id,
+                    'email' => $user->email
+                ]);
+            }
+
+            if ($success) {
+                // Log password reset success
+                UserSecurityLog::logEvent($user, 'password_reset_success', [
+                    'ip_address' => request()->ip(),
+                    'user_agent' => request()->userAgent(),
+                    'metadata' => json_encode([
+                        'reset_method' => 'token',
+                        'token_used' => !empty($token)
+                    ])
+                ]);
+
+                Log::info('Password reset completed successfully', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'password_changed_at' => $user->password_changed_at,
+                    'ip' => request()->ip()
+                ]);
+            }
+
+            return $success;
+        } catch (\Exception $e) {
+            Log::error('Failed to reset password with token', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'ip' => request()->ip()
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Validate password reset token
+     */
+    public function validatePasswordResetToken(User $user, string $token): bool
+    {
+        $record = DB::table('password_reset_tokens')
+            ->where('email', $user->email)
+            ->first();
+
+        if (!$record) {
+            return false;
+        }
+
+        // Check if token is expired (older than 24 hours)
+        if (now()->subHours(24)->gt($record->created_at)) {
+            // Clean up expired token
+            DB::table('password_reset_tokens')->where('email', $user->email)->delete();
+            return false;
+        }
+
+        // Verify token matches
+        return Hash::check($token, $record->token);
     }
 
     /**
@@ -593,20 +710,7 @@ class PasswordService
                     'lockout_remaining_minutes' => $lockoutRemainingMinutes,
                     'last_login_at' => $user->last_login_at?->toISOString(),
                 ],
-                'security_settings' => [
-                    'min_length' => $settings['min_length'],
-                    'require_uppercase' => $settings['require_uppercase'],
-                    'require_lowercase' => $settings['require_lowercase'],
-                    'require_numbers' => $settings['require_numbers'],
-                    'require_symbols' => $settings['require_symbols'],
-                    'password_expiry_days' => $settings['password_expiry_days'],
-                    'password_history_size' => $settings['password_history_size'],
-                    'max_login_attempts' => $settings['max_login_attempts'],
-                    'lockout_duration_minutes' => $settings['lockout_duration_minutes'],
-                    'force_password_change_on_first_login' => $settings['force_password_change_on_first_login'],
-                    'notify_on_password_change' => $settings['notify_on_password_change'],
-                    'require_mfa' => $settings['require_mfa'],
-                ],
+                'security_settings' => $settings,
                 'recent_security_events' => $lastSecurityEvents,
             ];
         } catch (\Exception $e) {
@@ -672,37 +776,17 @@ class PasswordService
             ];
         }
 
-        // 1. Check minimum length
-        if (strlen($password) < $settings['min_length']) {
-            $errors[] = "Password must be at least {$settings['min_length']} characters.";
-        }
+        // Check password against settings
+        $tempUser = new User(); // Create a temporary user for validation
+        $tempUser->security_settings = $settings;
 
-        // 2. Check uppercase
-        if ($settings['require_uppercase'] && !preg_match('/[A-Z]/', $password)) {
-            $errors[] = "Password must contain at least one uppercase letter (A-Z).";
-        }
-
-        // 3. Check lowercase
-        if ($settings['require_lowercase'] && !preg_match('/[a-z]/', $password)) {
-            $errors[] = "Password must contain at least one lowercase letter (a-z).";
-        }
-
-        // 4. Check numbers
-        if ($settings['require_numbers'] && !preg_match('/[0-9]/', $password)) {
-            $errors[] = "Password must contain at least one number (0-9).";
-        }
-
-        // 5. Check symbols
-        if ($settings['require_symbols'] && !preg_match('/[\W_]/', $password)) {
-            $errors[] = "Password must contain at least one special character (!@#$%^&* etc).";
-        }
+        $errors = $this->validatePassword($tempUser, $password);
 
         // Throw exception if there are errors
         if (!empty($errors)) {
             throw new \Exception(implode(' ', $errors));
         }
     }
-
 
     /**
      * Reset failed login attempts

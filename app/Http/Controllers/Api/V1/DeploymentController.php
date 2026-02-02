@@ -323,7 +323,7 @@ class DeploymentController extends Controller
 
             // 1. Log to file
             Log::channel('deployments')->info(
-                $success ? '✅ Deployment successful' : '❌ Deployment failed',
+                $success ? 'Deployment Successful' : 'Deployment Failed',
                 $notificationData
             );
 

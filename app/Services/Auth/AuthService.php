@@ -6,7 +6,10 @@ namespace App\Services\Auth;
 use App\Http\Resources\Api\V1\User\UserResource;
 use App\Models\User;
 use App\Models\UserSecurityLog;
+use App\Notifications\PasswordResetNotification;
 use App\Services\Role\RoleService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 
 
@@ -46,8 +49,8 @@ class AuthService
             throw new \Exception('Account is deactivated. Please contact administrator.');
         }
 
-        // Step 5: Check if vendor is active (if applicable)
-        if ($user->vendor_id && $user->vendor) {
+        // Step 5: Check if user is active
+        if ($user->vendor_id) {
             if ($user->vendor->status !== 'active') {
                 throw new \Exception('Vendor account is not active');
             }
@@ -194,6 +197,120 @@ class AuthService
 
 
     /**
+     * Send password reset link
+     */
+    public function sendPasswordResetLink(string $email): bool
+    {
+        try {
+            $user = User::where('email', $email)->first();
+
+            if (!$user) {
+                Log::warning('Password reset requested for non-existent email', ['email' => $email]);
+                return true; // Return true for security
+            }
+            // Generate reset token
+            $token = app('auth.password.broker')->createToken($user);
+            $this->passwordService->sendPasswordResetEmail($user, $token);
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Failed to send password reset link', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Reset password with token
+     */
+
+    public function resetPassword(array $data): bool
+    {
+        try {
+            $email = $data['email'] ?? null;
+            $token = $data['token'] ?? null;
+            $password = $data['password'] ?? null;
+
+            if (!$email || !$token || !$password) {
+                throw new \Exception('Email, token, and password are required');
+            }
+
+            Log::info('Password reset attempt initiated', [
+                'email' => $email,
+                'ip' => request()->ip(),
+                'user_agent' => request()->userAgent()
+            ]);
+
+            // Find user by email
+            $user = User::where('email', $email)->first();
+
+            if (!$user) {
+                // Security: Don't reveal if user exists
+                Log::warning('Password reset attempted for non-existent email', [
+                    'email' => $email,
+                    'ip' => request()->ip()
+                ]);
+                return false;
+            }
+
+            // Check if user can reset password
+            if (!$this->canUserResetPassword($user)) {
+                Log::warning('Password reset denied for user', [
+                    'user_id' => $user->id,
+                    'email' => $email,
+                    'reason' => 'User not eligible for password reset'
+                ]);
+                return false;
+            }
+
+            // Validate token using PasswordService
+            if (!$this->passwordService->validatePasswordResetToken($user, $token)) {
+                Log::warning('Invalid password reset token', [
+                    'user_id' => $user->id,
+                    'email' => $email,
+                    'ip' => request()->ip()
+                ]);
+
+                // Use PasswordService for logging security event
+                $this->passwordService->logSecurityEvent($user, 'suspicious_activity', [
+                    'metadata' => json_encode([
+                        'event' => 'invalid_password_reset_token',
+                        'reason' => 'Invalid or expired token'
+                    ])
+                ]);
+
+                return false;
+            }
+
+            // Use PasswordService to reset the password with all validations
+            $success = $this->passwordService->resetPasswordWithToken($user, $password, $token);
+
+            if ($success) {
+                // Use PasswordService for logging
+                $this->passwordService->logSecurityEvent($user, 'password_reset_success', [
+                    'metadata' => json_encode([
+                        'reset_method' => 'token',
+                        'reset_source' => 'self_service'
+                    ])
+                ]);
+            }
+
+            return $success;
+        } catch (\Exception $e) {
+            Log::error('Failed to reset password', [
+                'email' => $data['email'] ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'ip' => request()->ip()
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Resend verification email
      */
     public function resendVerification(string $email): bool
@@ -222,80 +339,59 @@ class AuthService
         }
     }
 
+
     /**
-     * Send password reset link
+     * Check if user is eligible for password reset
      */
-    public function sendPasswordResetLink(string $email): bool
+    private function canUserResetPassword(User $user): bool
     {
-        try {
-            $user = User::where('email', $email)->first();
-
-            if (!$user) {
-                Log::warning('Password reset requested for non-existent email', ['email' => $email]);
-                return true; // Return true for security (don't reveal if user exists)
-            }
-
-            // Generate reset token
-            $token = app('auth.password.broker')->createToken($user);
-
-            // You can implement email sending here
-            Log::info('Password reset link generated', [
+        // Don't allow system users to reset password
+        if ($user->is_system) {
+            Log::warning('Password reset attempted for system user', [
                 'user_id' => $user->id,
-                'email' => $email,
-                'token' => $token
-            ]);
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Failed to send password reset link', [
-                'email' => $email,
-                'error' => $e->getMessage()
+                'email' => $user->email
             ]);
             return false;
         }
-    }
 
-    /**
-     * Reset password with token
-     */
-    public function resetPassword(array $data): bool
-    {
-        try {
-            // Implement password reset logic
-            // This would use Laravel's password reset functionality
-
-            Log::info('Password reset requested', [
-                'email' => $data['email'] ?? 'unknown',
-                'ip' => request()->ip()
-            ]);
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Failed to reset password', [
-                'email' => $data['email'] ?? 'unknown',
-                'error' => $e->getMessage()
+        // Check if user is active
+        if (!$user->is_active) {
+            Log::warning('Password reset attempted for inactive user', [
+                'user_id' => $user->id,
+                'email' => $user->email
             ]);
             return false;
         }
-    }
 
-    /**
-     * Verify email
-     */
-    public function verifyEmail(string $token): bool
-    {
-        try {
-            // Implement email verification logic
-
-            Log::info('Email verification requested', ['token' => $token]);
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Failed to verify email', [
-                'token' => $token,
-                'error' => $e->getMessage()
+        // Check if account is locked using User model method
+        if ($user->isAccountLocked()) {
+            Log::warning('Password reset attempted for locked account', [
+                'user_id' => $user->id,
+                'email' => $user->email
             ]);
             return false;
         }
+
+        // Check rate limiting using UserSecurityLog
+        $recentResets = UserSecurityLog::where('user_id', $user->id)
+            ->where('event_type', 'password_reset_success')
+            ->where('event_time', '>', now()->subDay())
+            ->count();
+
+        // Get max reset attempts from security settings
+        $securitySettings = $this->passwordService->getSecuritySettings($user);
+        $maxResetsPerDay = $securitySettings['max_reset_attempts_per_day'] ?? 3;
+
+        if ($recentResets >= $maxResetsPerDay) {
+            Log::warning('Password reset rate limit exceeded', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'recent_resets' => $recentResets,
+                'max_allowed' => $maxResetsPerDay
+            ]);
+            return false;
+        }
+
+        return true;
     }
 }

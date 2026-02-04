@@ -259,95 +259,50 @@ class DeploymentController extends Controller
             $timestamp = date('Y-m-d_H-i-s');
             $backupDir = storage_path("backups/{$timestamp}");
 
-            // Create backup directory with proper permissions
             if (!file_exists($backupDir)) {
                 mkdir($backupDir, 0755, true);
-                Log::info('Created backup directory', ['path' => $backupDir]);
             }
 
-            // 1. Backup database using a simpler approach
+            // Use --no-tablespaces to avoid needing PROCESS privilege
             $dbFile = "{$backupDir}/database.sql";
+            $dbUser = env('DB_USERNAME');
+            $dbPass = env('DB_PASSWORD');
+            $dbName = env('DB_DATABASE');
 
-            // Use Process class directly (not through executeCommand)
-            $process = new Process([
-                'mysqldump',
-                '-u' . env('DB_USERNAME', 'forge'),
-                '-p' . env('DB_PASSWORD', ''),
-                env('DB_DATABASE', 'forge')
-            ]);
+            // Use MYSQL_PWD environment variable for security
+            $process = Process::fromShellCommandline(
+                "mysqldump --no-tablespaces --single-transaction --quick {$dbName} > {$dbFile}"
+            );
 
             $process->setWorkingDirectory(base_path());
-            $process->setTimeout(60);
+            $process->setEnv([
+                'MYSQL_PWD' => $dbPass,
+                'MYSQL_USER' => $dbUser
+            ]);
+            $process->setTimeout(300);
             $process->run();
 
-            if ($process->isSuccessful()) {
-                file_put_contents($dbFile, $process->getOutput());
-                Log::info('Database backup created', [
-                    'file' => $dbFile,
-                    'size' => filesize($dbFile)
-                ]);
-            } else {
+            if (!$process->isSuccessful()) {
                 Log::error('Database backup failed', [
-                    'error' => $process->getErrorOutput(),
-                    'output' => $process->getOutput()
+                    'error' => $process->getErrorOutput()
                 ]);
-                // Continue anyway, don't throw exception immediately
+                return null;
             }
 
-            // 2. Backup .env file
-            $envSource = base_path('.env');
-            $envDest = "{$backupDir}/.env";
-
-            if (file_exists($envSource)) {
-                copy($envSource, $envDest);
-                Log::info('Backed up .env file', [
-                    'source' => $envSource,
-                    'dest' => $envDest,
-                    'size' => filesize($envDest)
-                ]);
-            } else {
-                Log::warning('.env file not found', ['path' => $envSource]);
-            }
-
-            // 3. Create backup info file
-            $backupInfo = [
-                'timestamp' => $timestamp,
-                'git_hash' => trim(shell_exec('git rev-parse HEAD 2>/dev/null || echo "unknown"')),
-                'created_at' => now()->toDateTimeString(),
-                'database' => [
-                    'name' => env('DB_DATABASE'),
-                    'backup_file' => basename($dbFile),
-                    'backup_size' => file_exists($dbFile) ? filesize($dbFile) : 0,
-                ],
-                'env_file' => [
-                    'backup_size' => file_exists($envDest) ? filesize($envDest) : 0,
-                ]
-            ];
-
-            file_put_contents("{$backupDir}/backup.info", json_encode($backupInfo, JSON_PRETTY_PRINT));
-            Log::info('Created backup info file', $backupInfo);
-
-            // 4. List all files in backup directory for debugging
-            $files = scandir($backupDir);
-            $actualFiles = array_diff($files, ['.', '..']);
-
-            Log::info('Backup directory contents', [
-                'path' => $backupDir,
-                'files' => array_values($actualFiles),
-                'file_count' => count($actualFiles)
+            Log::info('Database backup created', [
+                'size' => filesize($dbFile),
+                'command' => 'mysqldump --no-tablespaces'
             ]);
 
-            // Return the backup directory path
+            // Backup .env
+            copy(base_path('.env'), "{$backupDir}/.env");
+
             return $backupDir;
         } catch (\Exception $e) {
-            Log::error('Backup creation failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::error('Backup failed', ['error' => $e->getMessage()]);
             return null;
         }
     }
-
 
     /**
      * Send deployment notifications
@@ -396,7 +351,7 @@ class DeploymentController extends Controller
             $this->sendDeploymentEmailNotification($notificationData);
 
             // 4. Optional: Also log to database for analytics
-            $this->logDeploymentToDatabase($notificationData);
+            // $this->logDeploymentToDatabase($notificationData);
         } catch (\Exception $e) {
             Log::error('Notification system failed', ['error' => $e->getMessage()]);
         }

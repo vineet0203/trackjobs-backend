@@ -259,36 +259,91 @@ class DeploymentController extends Controller
             $timestamp = date('Y-m-d_H-i-s');
             $backupDir = storage_path("backups/{$timestamp}");
 
+            // Create backup directory with proper permissions
             if (!file_exists($backupDir)) {
                 mkdir($backupDir, 0755, true);
+                Log::info('Created backup directory', ['path' => $backupDir]);
             }
 
-            // Backup database
+            // 1. Backup database using a simpler approach
             $dbFile = "{$backupDir}/database.sql";
-            $command = sprintf(
-                'mysqldump -u%s -p%s %s > %s',
-                escapeshellarg(env('DB_USERNAME')),
-                escapeshellarg(env('DB_PASSWORD')),
-                escapeshellarg(env('DB_DATABASE')),
-                escapeshellarg($dbFile)
-            );
 
-            $this->executeCommand(explode(' ', $command), 'Database backup');
+            // Use Process class directly (not through executeCommand)
+            $process = new Process([
+                'mysqldump',
+                '-u' . env('DB_USERNAME', 'forge'),
+                '-p' . env('DB_PASSWORD', ''),
+                env('DB_DATABASE', 'forge')
+            ]);
 
-            // Backup .env file
-            copy(base_path('.env'), "{$backupDir}/.env");
+            $process->setWorkingDirectory(base_path());
+            $process->setTimeout(60);
+            $process->run();
 
-            // Create backup info file
-            file_put_contents("{$backupDir}/backup.info", json_encode([
+            if ($process->isSuccessful()) {
+                file_put_contents($dbFile, $process->getOutput());
+                Log::info('Database backup created', [
+                    'file' => $dbFile,
+                    'size' => filesize($dbFile)
+                ]);
+            } else {
+                Log::error('Database backup failed', [
+                    'error' => $process->getErrorOutput(),
+                    'output' => $process->getOutput()
+                ]);
+                // Continue anyway, don't throw exception immediately
+            }
+
+            // 2. Backup .env file
+            $envSource = base_path('.env');
+            $envDest = "{$backupDir}/.env";
+
+            if (file_exists($envSource)) {
+                copy($envSource, $envDest);
+                Log::info('Backed up .env file', [
+                    'source' => $envSource,
+                    'dest' => $envDest,
+                    'size' => filesize($envDest)
+                ]);
+            } else {
+                Log::warning('.env file not found', ['path' => $envSource]);
+            }
+
+            // 3. Create backup info file
+            $backupInfo = [
                 'timestamp' => $timestamp,
-                'git_hash' => trim(shell_exec('git rev-parse HEAD')),
+                'git_hash' => trim(shell_exec('git rev-parse HEAD 2>/dev/null || echo "unknown"')),
                 'created_at' => now()->toDateTimeString(),
-            ], JSON_PRETTY_PRINT));
+                'database' => [
+                    'name' => env('DB_DATABASE'),
+                    'backup_file' => basename($dbFile),
+                    'backup_size' => file_exists($dbFile) ? filesize($dbFile) : 0,
+                ],
+                'env_file' => [
+                    'backup_size' => file_exists($envDest) ? filesize($envDest) : 0,
+                ]
+            ];
 
-            Log::info('Backup created successfully', ['path' => $backupDir]);
+            file_put_contents("{$backupDir}/backup.info", json_encode($backupInfo, JSON_PRETTY_PRINT));
+            Log::info('Created backup info file', $backupInfo);
+
+            // 4. List all files in backup directory for debugging
+            $files = scandir($backupDir);
+            $actualFiles = array_diff($files, ['.', '..']);
+
+            Log::info('Backup directory contents', [
+                'path' => $backupDir,
+                'files' => array_values($actualFiles),
+                'file_count' => count($actualFiles)
+            ]);
+
+            // Return the backup directory path
             return $backupDir;
         } catch (\Exception $e) {
-            Log::error('Backup creation failed', ['error' => $e->getMessage()]);
+            Log::error('Backup creation failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return null;
         }
     }

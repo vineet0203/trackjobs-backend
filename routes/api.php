@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Client\ClientController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\DeploymentController;
 use App\Http\Controllers\Api\V1\SignedFileController;
@@ -70,6 +71,20 @@ Route::middleware(['jwt.verify'])->group(function () {
         // Security information
         Route::get('security/info', [AuthController::class, 'getPasswordSecurityInfo'])->name('auth.security-info');
         Route::get('security/logs', [AuthController::class, 'getSecurityLogs'])->name('auth.security-logs');
+    });
+
+
+    Route::prefix('vendors')->group(function () {
+        // Get all clients for a vendor with filters
+        Route::get('{vendorId}/clients', [ClientController::class, 'getVendorClients']);
+        // Get a specific client for a vendor
+        Route::get('{vendorId}/clients/{clientId}', [ClientController::class, 'getVendorClient']);
+        // Add a new client for a vendor
+        Route::post('{vendorId}/clients', [ClientController::class, 'addClient']);
+        // Update a client for a vendor
+        Route::put('{vendorId}/clients/{clientId}', [ClientController::class, 'modifyClient']);
+        // Delete a client for a vendor
+        Route::delete('{vendorId}/clients/{clientId}', [ClientController::class, 'removeClient']);
     });
 
     // Upload routes

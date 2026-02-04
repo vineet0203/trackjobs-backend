@@ -234,36 +234,18 @@ class AuthService
             $token = $data['token'] ?? null;
             $password = $data['password'] ?? null;
 
-            if (!$email || !$token || !$password) {
-                throw new \Exception('Email, token, and password are required');
-            }
-
-            Log::info('Password reset attempt initiated', [
-                'email' => $email,
-                'ip' => request()->ip(),
-                'user_agent' => request()->userAgent()
-            ]);
-
             // Find user by email
             $user = User::where('email', $email)->first();
 
             if (!$user) {
                 // Security: Don't reveal if user exists
-                Log::warning('Password reset attempted for non-existent email', [
-                    'email' => $email,
-                    'ip' => request()->ip()
-                ]);
-                return false;
+                // Throw exception instead of returning false
+                throw new \Exception('Sorry, something went wrong. please check your input and try again.');
             }
 
             // Check if user can reset password
             if (!$this->canUserResetPassword($user)) {
-                Log::warning('Password reset denied for user', [
-                    'user_id' => $user->id,
-                    'email' => $email,
-                    'reason' => 'User not eligible for password reset'
-                ]);
-                return false;
+                throw new \Exception('Unable to reset password at this time.');
             }
 
             // Validate token using PasswordService
@@ -274,31 +256,17 @@ class AuthService
                     'ip' => request()->ip()
                 ]);
 
-                // Use PasswordService for logging security event
-                $this->passwordService->logSecurityEvent($user, 'suspicious_activity', [
-                    'metadata' => json_encode([
-                        'event' => 'invalid_password_reset_token',
-                        'reason' => 'Invalid or expired token'
-                    ])
-                ]);
-
-                return false;
+                throw new \Exception('Invalid or expired reset token.');
             }
-
             // Use PasswordService to reset the password with all validations
+            // This will throw exceptions for password validation errors
             $success = $this->passwordService->resetPasswordWithToken($user, $password, $token);
 
             if ($success) {
-                // Use PasswordService for logging
-                $this->passwordService->logSecurityEvent($user, 'password_reset_success', [
-                    'metadata' => json_encode([
-                        'reset_method' => 'token',
-                        'reset_source' => 'self_service'
-                    ])
-                ]);
+                return true;
             }
-
-            return $success;
+            // If we get here without an exception, something unexpected happened
+            throw new \Exception('Failed to reset password. Please try again.');
         } catch (\Exception $e) {
             Log::error('Failed to reset password', [
                 'email' => $data['email'] ?? 'unknown',
@@ -306,7 +274,9 @@ class AuthService
                 'trace' => $e->getTraceAsString(),
                 'ip' => request()->ip()
             ]);
-            return false;
+
+            // Re-throw the exception so controller can catch it
+            throw $e;
         }
     }
 

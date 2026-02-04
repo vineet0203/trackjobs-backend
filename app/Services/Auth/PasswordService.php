@@ -485,16 +485,6 @@ class PasswordService
                     'errors' => $validationErrors,
                     'ip' => request()->ip()
                 ]);
-
-                UserSecurityLog::logEvent($user, 'suspicious_activity', [
-                    'ip_address' => request()->ip(),
-                    'user_agent' => request()->userAgent(),
-                    'metadata' => json_encode([
-                        'event' => 'password_reset_validation_failed',
-                        'errors' => $validationErrors
-                    ])
-                ]);
-
                 throw new \Exception($errorMessage);
             }
 

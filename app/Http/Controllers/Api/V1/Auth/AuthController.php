@@ -3,19 +3,16 @@
 namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Api\V1\BaseController;
-use App\Http\Requests\Api\V1\Auth\ForceChangePasswordRequest;
 use App\Http\Requests\Api\V1\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\UpdatePasswordRequest;
 use App\Http\Resources\Api\V1\User\UserResource;
-use App\Models\User;
 use App\Services\Auth\AuthService;
 use App\Services\Auth\PasswordService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -54,27 +51,29 @@ class AuthController extends BaseController
         $request->headers->set('Accept', 'application/json');
 
         try {
+            Log::info('=== REGISTRATION START ===', [
+                'email' => $request->email,
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
             // Throw ValidationException if validation fails
             $validatedData = $request->validated();
             $user = $this->authService->register($validatedData);
-            // Use the ApiResponse trait's createdResponse method
+
             return $this->createdResponse(
                 new UserResource($user),
                 'Registration successful!'
             );
-        } catch (ValidationException $e) {
-            Log::error('Validation Exception:', ['errors' => $e->errors()]);
 
-            // Use the ApiResponse trait's validationErrorResponse method
+        } catch (ValidationException $e) {
             return $this->validationErrorResponse($e->errors());
+
         } catch (\Exception $e) {
-            Log::error('Registration Exception:', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return $this->errorResponse('Registration failed: ' . $e->getMessage(), 400);
+            return $this->errorResponse(
+                'Registration failed. Please try again.',
+                400
+            );
         } finally {
             Log::info('=== REGISTRATION END ===');
         }
@@ -127,20 +126,19 @@ class AuthController extends BaseController
                     'user_agent' => $request->userAgent()
                 ]);
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Password has been reset successfully. You can now login with your new password.',
-                    'data' => [
-                        'password_changed_at' => now()->toISOString()
-                    ]
-                ]);
+                // Using successResponse with data
+                return $this->successResponse(
+                    ['password_changed_at' => now()->toISOString()],
+                    'Password has been reset successfully. You can now login with your new password.',
+                    200
+                );
             }
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid or expired reset token.',
-                'error_code' => 'INVALID_RESET_TOKEN'
-            ], 400);
+            // Using errorResponse with custom message
+            return $this->errorResponse(
+                'Invalid or expired reset token.',
+                400
+            );
         } catch (\Exception $e) {
             Log::error('Password reset API failed', [
                 'email' => $request->email ?? 'unknown',
@@ -149,57 +147,11 @@ class AuthController extends BaseController
                 'user_agent' => $request->userAgent()
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-                'error_code' => 'PASSWORD_RESET_FAILED'
-            ], 400);
-        }
-    }
-
-    /**
-     * Verify reset token
-     */
-    public function verifyResetToken(Request $request): JsonResponse
-    {
-        try {
-            $request->validate([
-                'email' => 'required|email|exists:users,email',
-                'token' => 'required|string'
-            ]);
-
-            // Check if token is valid (this is a simplified example)
-            // In a real implementation, you would verify the token against your database
-            $user = User::where('email', $request->email)->first();
-
-            if (!$user) {
-                return $this->errorResponse('Invalid reset token.', 400);
-            }
-
-            // Here you would implement actual token verification
-            // For example, using Laravel's Password Broker:
-            // $isValid = Password::broker()->tokenExists($user, $request->token);
-
-            // For now, we'll assume the token is valid if user exists
-            // (You should implement proper token verification)
-
-            Log::info('Reset token verification requested', [
-                'email' => $request->email,
-                'ip' => $request->ip()
-            ]);
-
-            return $this->successResponse(
-                ['valid' => true],
-                'Reset token is valid.'
+            // Using errorResponse with exception message
+            return $this->errorResponse(
+                $e->getMessage(),
+                400
             );
-        } catch (\Exception $e) {
-            Log::error('Failed to verify reset token', [
-                'email' => $request->email ?? 'unknown',
-                'error' => $e->getMessage(),
-                'ip' => $request->ip()
-            ]);
-
-            return $this->errorResponse('Invalid reset token.', 400);
         }
     }
 
@@ -231,7 +183,6 @@ class AuthController extends BaseController
             return $this->errorResponse($e->getMessage(), 400);
         }
     }
-
 
     /**
      * Get password security information
@@ -307,7 +258,6 @@ class AuthController extends BaseController
             return $this->errorResponse('Logout failed', 500);
         }
     }
-
 
     /**
      * Refresh JWT token

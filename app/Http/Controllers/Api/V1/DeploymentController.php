@@ -271,9 +271,10 @@ class DeploymentController extends Controller
 
             // Use --no-tablespaces to avoid needing PROCESS privilege
             $dbFile = "{$backupDir}/database.sql";
-            $dbUser = env('DB_USERNAME');
-            $dbPass = env('DB_PASSWORD');
-            $dbName = env('DB_DATABASE');
+            $config = config('database.connections.mysql');
+            $dbUser = $config['username'];
+            $dbPass = $config['password'];
+            $dbName = $config['database'];
 
             // Use MYSQL_PWD environment variable for security
             $process = Process::fromShellCommandline(

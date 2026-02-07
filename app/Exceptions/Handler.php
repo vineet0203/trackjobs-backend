@@ -39,45 +39,49 @@ class Handler extends ExceptionHandler
 
     protected function handleApiException($request, Throwable $exception)
     {
-        // Authentication Exceptions (for non-JWT auth failures)
+        // Authentication Exceptions
         if ($exception instanceof AuthenticationException) {
             return response()->json([
                 'success' => false,
-                'message' => 'Authentication required. Please log in.',
+                'message' => 'Authentication required. Please provide valid credentials to access this resource.',
                 'timestamp' => now()->toISOString(),
                 'code' => 401,
+                'error_code' => 'AUTH_REQUIRED'
             ], 401);
         }
 
-        // Authorization Exceptions (for policy/ability failures) - ADD THIS
+        // Authorization Exceptions
         if ($exception instanceof AuthorizationException) {
             return response()->json([
                 'success' => false,
-                'message' => 'You do not have permission to perform this action.',
+                'message' => 'Access denied. You do not have permission to perform this action.',
                 'timestamp' => now()->toISOString(),
                 'code' => 403,
+                'error_code' => 'FORBIDDEN',
                 'error_details' => config('app.debug') ? $exception->getMessage() : null,
             ], 403);
         }
 
-        // Unauthorized HTTP Exceptions (for 403 errors)
+        // Unauthorized HTTP Exceptions
         if ($exception instanceof UnauthorizedHttpException) {
             return response()->json([
                 'success' => false,
-                'message' => $exception->getMessage() ?: 'Unauthorized access.',
+                'message' => 'Unauthorized access. Authentication credentials were missing or invalid.',
                 'timestamp' => now()->toISOString(),
-                'code' => 403,
-            ], 403);
+                'code' => 401,
+                'error_code' => 'UNAUTHORIZED'
+            ], 401);
         }
 
         // Validation Exceptions
         if ($exception instanceof ValidationException) {
             return response()->json([
                 'success' => false,
-                'message' => 'Validation failed.',
+                'message' => 'Validation failed. Please review the submitted data.',
                 'errors' => $exception->errors(),
                 'timestamp' => now()->toISOString(),
                 'code' => 422,
+                'error_code' => 'VALIDATION_ERROR'
             ], 422);
         }
 
@@ -85,9 +89,10 @@ class Handler extends ExceptionHandler
         if ($exception instanceof NotFoundHttpException) {
             return response()->json([
                 'success' => false,
-                'message' => 'The requested endpoint was not found.',
+                'message' => 'The requested API endpoint could not be found.',
                 'timestamp' => now()->toISOString(),
                 'code' => 404,
+                'error_code' => 'ENDPOINT_NOT_FOUND'
             ], 404);
         }
 
@@ -97,6 +102,7 @@ class Handler extends ExceptionHandler
                 'message' => 'The requested resource was not found.',
                 'timestamp' => now()->toISOString(),
                 'code' => 404,
+                'error_code' => 'RESOURCE_NOT_FOUND'
             ], 404);
         }
 
@@ -104,18 +110,20 @@ class Handler extends ExceptionHandler
         if ($exception instanceof MethodNotAllowedHttpException) {
             return response()->json([
                 'success' => false,
-                'message' => 'The HTTP method is not allowed for this endpoint.',
+                'message' => 'The HTTP method used is not supported for this endpoint.',
                 'timestamp' => now()->toISOString(),
                 'code' => 405,
+                'error_code' => 'METHOD_NOT_ALLOWED'
             ], 405);
         }
 
-        // For other exceptions, return JSON with debug info in development
+        // Generic Server Error
         $response = [
             'success' => false,
-            'message' => 'An error occurred.',
+            'message' => 'An unexpected error occurred. Please try again later.',
             'timestamp' => now()->toISOString(),
             'code' => 500,
+            'error_code' => 'INTERNAL_SERVER_ERROR'
         ];
 
         if (config('app.debug')) {

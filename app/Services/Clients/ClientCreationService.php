@@ -1,24 +1,34 @@
 <?php
+// app/Services/Clients/ClientCreationService.php
 
 namespace App\Services\Clients;
 
 use App\Models\Client;
+use App\Services\File\FileValidationRules;
+use App\Services\File\FileAttachmentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ClientCreationService
 {
+    public function __construct(
+        private FileAttachmentService $fileAttachmentService
+    ) {}
+
     /**
      * Create a new client
      */
     public function create(array $data, int $createdBy): Client
     {
         DB::beginTransaction();
-        
+
         try {
-            // Add created_by and updated_by
-            $data['created_by'] = $createdBy;
-            $data['updated_by'] = $createdBy;
+            Log::info('=== CLIENT CREATION START ===', [
+                'data_keys' => array_keys($data),
+                'has_logo_temp_id' => isset($data['logo_temp_id']),
+                'logo_temp_id' => $data['logo_temp_id'] ?? null,
+                'created_by' => $createdBy
+            ]);
 
             // Handle billing address logic
             if ($data['same_as_business_address'] ?? false) {
@@ -26,10 +36,28 @@ class ClientCreationService
             }
 
             // Handle logo upload if present
-            if (isset($data['logo']) && $data['logo'] instanceof \Illuminate\Http\UploadedFile) {
-                $data['logo_path'] = $this->uploadLogo($data['logo']);
-                unset($data['logo']);
+            if (isset($data['logo_temp_id'])) {
+                $errors = $this->fileAttachmentService->attachFile(
+                    data: $data,
+                    tempIdField: 'logo_temp_id',
+                    pathField: 'logo_path',
+                    destinationPath: 'clients/logos', // 'private/clients/logos'
+                    allowedMimeTypes: FileValidationRules::getAllowedMimeTypes('images'),
+                    maxSizeKb: FileValidationRules::getSizeLimits('images'),
+                    customFilename: $this->generateLogoFilename($data['business_name']),
+                    keepOriginalName: false
+                );
+
+                if (!empty($errors)) {
+                    throw new \Exception(implode(', ', $errors['logo_temp_id'] ?? []));
+                }
             }
+            
+            Log::info('Creating client with data', [
+                'data_keys' => array_keys($data),
+                'has_logo_path' => isset($data['logo_path']),
+                'logo_path' => $data['logo_path'] ?? null
+            ]);
 
             $client = Client::create($data);
 
@@ -39,13 +67,23 @@ class ClientCreationService
                 'client_id' => $client->id,
                 'vendor_id' => $client->vendor_id,
                 'business_name' => $client->business_name,
+                'has_logo' => !empty($client->logo_path),
+                'logo_path' => $client->logo_path,
                 'created_by' => $createdBy,
             ]);
 
             return $client;
-
         } catch (\Exception $e) {
             DB::rollBack();
+
+            // Cleanup any temporary uploads if creation failed
+            if (isset($data['logo_temp_id'])) {
+                Log::info('Cleaning up temporary upload due to failure', [
+                    'temp_id' => $data['logo_temp_id']
+                ]);
+                $this->fileAttachmentService->cleanupUnusedTemporaryUpload($data['logo_temp_id']);
+            }
+
             Log::error('Failed to create client', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
@@ -54,6 +92,17 @@ class ClientCreationService
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Generate logo filename
+     */
+    private function generateLogoFilename(string $businessName): string
+    {
+        $slug = \Illuminate\Support\Str::slug($businessName);
+        $timestamp = time();
+        $random = \Illuminate\Support\Str::random(6);
+        return "logo_{$slug}_{$random}_{$timestamp}.png";
     }
 
     /**
@@ -69,15 +118,6 @@ class ClientCreationService
         $data['billing_zip_code'] = $data['zip_code'];
 
         return $data;
-    }
-
-    /**
-     * Upload client logo
-     */
-    private function uploadLogo(\Illuminate\Http\UploadedFile $logo): string
-    {
-        $path = $logo->store('clients/logos', 'public');
-        return $path;
     }
 
     /**

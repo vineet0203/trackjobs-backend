@@ -1,0 +1,461 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1\Quotes;
+
+use App\Http\Controllers\Api\V1\BaseController;
+use App\Http\Requests\Api\V1\Quotes\CreateQuoteRequest;
+use App\Http\Requests\Api\V1\Quotes\UpdateQuoteRequest;
+use App\Http\Requests\Api\V1\Quotes\GetQuotesRequest;
+use App\Http\Resources\Api\V1\Quote\QuoteCollection;
+use App\Http\Resources\Api\V1\Quote\QuoteResource;
+use App\Services\Quotes\QuoteCreationService;
+use App\Services\Quotes\QuoteQueryService;
+use App\Services\Quotes\QuoteUpdateService;
+use App\Services\Quotes\QuoteDeletionService;
+use App\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
+
+class QuoteController extends BaseController
+{
+    use ApiResponse;
+
+    private QuoteCreationService $quoteCreationService;
+    private QuoteQueryService $quoteQueryService;
+    private QuoteUpdateService $quoteUpdateService;
+    private QuoteDeletionService $quoteDeletionService;
+
+    public function __construct(
+        QuoteCreationService $quoteCreationService,
+        QuoteQueryService $quoteQueryService,
+        QuoteUpdateService $quoteUpdateService,
+        QuoteDeletionService $quoteDeletionService
+    ) {
+        $this->quoteCreationService = $quoteCreationService;
+        $this->quoteQueryService = $quoteQueryService;
+        $this->quoteUpdateService = $quoteUpdateService;
+        $this->quoteDeletionService = $quoteDeletionService;
+    }
+
+    /**
+     * Create a new quote
+     */
+    public function store(CreateQuoteRequest $request): JsonResponse
+    {
+        try {
+            Log::info('=== CREATE QUOTE START ===', [
+                'client_email' => $request->client_email,
+                'title' => $request->title,
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            // Check for duplicate quote
+            $isDuplicate = $this->quoteCreationService->validateDuplicateQuote(
+                $request->client_email,
+                $request->title
+            );
+
+            if ($isDuplicate) {
+                Log::warning('Duplicate quote detected', [
+                    'client_email' => $request->client_email,
+                    'title' => $request->title,
+                ]);
+
+                return $this->errorResponse(
+                    'A similar quote already exists for this client.',
+                    409
+                );
+            }
+
+            $validatedData = $request->validated();
+            $quote = $this->quoteCreationService->create($validatedData, auth()->id());
+
+            Log::info('=== CREATE QUOTE END ===', [
+                'quote_id' => $quote->id,
+                'quote_number' => $quote->quote_number,
+                'status' => 'success'
+            ]);
+
+            return $this->createdResponse(
+                new QuoteResource($quote),
+                'Quote created successfully.'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== CREATE QUOTE END ===', [
+                'status' => 'error',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'client_email' => $request->client_email,
+            ]);
+
+            return $this->errorResponse(
+                'Failed to create quote. Please try again.',
+                500
+            );
+        }
+    }
+
+    /**
+     * Get all quotes with filtering and pagination
+     */
+    public function index(GetQuotesRequest $request): JsonResponse
+    {
+        try {
+            Log::info('=== GET QUOTES START ===', [
+                'filters' => $request->all(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            $validated = $request->validated();
+            $quotes = $this->quoteQueryService->getQuotes($validated, $validated['per_page'] ?? 15);
+
+            $appliedFilters = $this->quoteQueryService->getAppliedFilters($validated);
+
+            Log::info('=== GET QUOTES END ===', [
+                'total_quotes' => $quotes->total(),
+                'current_page' => $quotes->currentPage(),
+                'status' => 'success'
+            ]);
+
+            return $this->successResponse(
+                new QuoteCollection($quotes),
+                'Quotes retrieved successfully.',
+                200,
+                [
+                    'filters' => $appliedFilters,
+                    'pagination' => [
+                        'total' => $quotes->total(),
+                        'per_page' => $quotes->perPage(),
+                        'current_page' => $quotes->currentPage(),
+                        'last_page' => $quotes->lastPage(),
+                    ]
+                ]
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== GET QUOTES END ===', [
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Failed to retrieve quotes. Please try again.',
+                500
+            );
+        }
+    }
+
+    /**
+     * Get a single quote by ID
+     */
+    public function show(int $id): JsonResponse
+    {
+        try {
+            Log::info('=== GET QUOTE START ===', [
+                'quote_id' => $id,
+            ]);
+
+            $quote = $this->quoteQueryService->getQuote($id);
+
+            if (!$quote) {
+                Log::warning('Quote not found', [
+                    'quote_id' => $id,
+                ]);
+
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            Log::info('=== GET QUOTE END ===', [
+                'quote_id' => $quote->id,
+                'quote_number' => $quote->quote_number,
+                'status' => 'success'
+            ]);
+
+            return $this->successResponse(
+                new QuoteResource($quote),
+                'Quote retrieved successfully.'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== GET QUOTE END ===', [
+                'quote_id' => $id,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Failed to retrieve quote. Please try again.',
+                500
+            );
+        }
+    }
+
+    /**
+     * Get a quote by quote number
+     */
+    public function showByNumber(string $quoteNumber): JsonResponse
+    {
+        try {
+            Log::info('=== GET QUOTE BY NUMBER START ===', [
+                'quote_number' => $quoteNumber,
+            ]);
+
+            $quote = $this->quoteQueryService->getQuoteByNumber($quoteNumber);
+
+            if (!$quote) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            Log::info('=== GET QUOTE BY NUMBER END ===', [
+                'quote_id' => $quote->id,
+                'quote_number' => $quote->quote_number,
+                'status' => 'success'
+            ]);
+
+            return $this->successResponse(
+                new QuoteResource($quote),
+                'Quote retrieved successfully.'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== GET QUOTE BY NUMBER END ===', [
+                'quote_number' => $quoteNumber,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Failed to retrieve quote. Please try again.',
+                500
+            );
+        }
+    }
+
+    /**
+     * Update a quote
+     */
+    public function update(UpdateQuoteRequest $request, int $id): JsonResponse
+    {
+        try {
+            Log::info('=== UPDATE QUOTE START ===', [
+                'quote_id' => $id,
+                'updates' => array_keys($request->all()),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ]);
+
+            $quote = $this->quoteQueryService->getQuote($id);
+
+            if (!$quote) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            $validatedData = $request->validated();
+            $quote = $this->quoteUpdateService->update($quote, $validatedData, auth()->id());
+
+            Log::info('=== UPDATE QUOTE END ===', [
+                'quote_id' => $quote->id,
+                'quote_number' => $quote->quote_number,
+                'status' => 'success'
+            ]);
+
+            return $this->successResponse(
+                new QuoteResource($quote),
+                'Quote updated successfully.'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== UPDATE QUOTE END ===', [
+                'quote_id' => $id,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return $this->errorResponse(
+                $e->getMessage(),
+                400
+            );
+        }
+    }
+
+    /**
+     * Send a quote to client
+     */
+    public function send(int $id): JsonResponse
+    {
+        try {
+            Log::info('=== SEND QUOTE START ===', [
+                'quote_id' => $id,
+                'sent_by' => auth()->id(),
+            ]);
+
+            $quote = $this->quoteQueryService->getQuote($id);
+
+            if (!$quote) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            $quote = $this->quoteCreationService->sendQuote($quote, auth()->id());
+
+            Log::info('=== SEND QUOTE END ===', [
+                'quote_id' => $quote->id,
+                'quote_number' => $quote->quote_number,
+                'status' => 'success'
+            ]);
+
+            return $this->successResponse(
+                new QuoteResource($quote),
+                'Quote sent successfully.'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== SEND QUOTE END ===', [
+                'quote_id' => $id,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                $e->getMessage(),
+                400
+            );
+        }
+    }
+
+    /**
+     * Delete/soft delete a quote
+     */
+    public function destroy(int $id): JsonResponse
+    {
+        try {
+            Log::info('=== DELETE QUOTE START ===', [
+                'quote_id' => $id,
+                'deleted_by' => auth()->id(),
+            ]);
+
+            $quote = $this->quoteQueryService->getQuote($id);
+
+            if (!$quote) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            // Check if quote can be deleted
+            $canDelete = $this->quoteDeletionService->canDelete($quote);
+            
+            if (!$canDelete['can_delete']) {
+                return $this->errorResponse(
+                    $canDelete['message'],
+                    409
+                );
+            }
+
+            $this->quoteDeletionService->softDelete($quote, auth()->id());
+
+            Log::info('=== DELETE QUOTE END ===', [
+                'quote_id' => $id,
+                'status' => 'success'
+            ]);
+
+            return $this->successResponse(
+                null,
+                'Quote deleted successfully.'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== DELETE QUOTE END ===', [
+                'quote_id' => $id,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Failed to delete quote. Please try again.',
+                500
+            );
+        }
+    }
+
+    /**
+     * Get quote statistics
+     */
+    public function statistics(): JsonResponse
+    {
+        try {
+            Log::info('=== GET QUOTE STATISTICS START ===');
+
+            $statistics = $this->quoteQueryService->getQuoteStatistics();
+
+            Log::info('=== GET QUOTE STATISTICS END ===', [
+                'status' => 'success'
+            ]);
+
+            return $this->successResponse(
+                $statistics,
+                'Quote statistics retrieved successfully.'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== GET QUOTE STATISTICS END ===', [
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Failed to retrieve quote statistics.',
+                500
+            );
+        }
+    }
+
+    /**
+     * Update follow-up status
+     */
+    public function updateFollowUpStatus(int $id): JsonResponse
+    {
+        try {
+            Log::info('=== UPDATE FOLLOW-UP STATUS START ===', [
+                'quote_id' => $id,
+                'status' => request('status'),
+            ]);
+
+            $quote = $this->quoteQueryService->getQuote($id);
+
+            if (!$quote) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            $status = request()->validate([
+                'status' => 'required|in:scheduled,completed,cancelled',
+            ])['status'];
+
+            $quote = $this->quoteUpdateService->updateFollowUpStatus($quote, $status, auth()->id());
+
+            Log::info('=== UPDATE FOLLOW-UP STATUS END ===', [
+                'quote_id' => $quote->id,
+                'status' => $status,
+                'success' => 'success'
+            ]);
+
+            return $this->successResponse(
+                new QuoteResource($quote),
+                'Follow-up status updated successfully.'
+            );
+
+        } catch (\Exception $e) {
+            Log::error('=== UPDATE FOLLOW-UP STATUS END ===', [
+                'quote_id' => $id,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Failed to update follow-up status.',
+                500
+            );
+        }
+    }
+}

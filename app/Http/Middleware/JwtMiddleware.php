@@ -16,11 +16,11 @@ class JwtMiddleware
     {
         try {
             $user = JWTAuth::parseToken()->authenticate();
-            
+
             if (!$user) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'User not found',
+                    'message' => 'Authentication failed. The requested user account could not be found.',
                     'timestamp' => now()->toISOString(),
                     'code' => 401,
                     'error_code' => 'USER_NOT_FOUND'
@@ -28,54 +28,52 @@ class JwtMiddleware
             }
 
             // Check if user is active
-            if (!$user->is_active) {
+            if (!$user->is_active || $user->status !== 'active') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Account is deactivated',
+                    'message' => 'Access denied. This account has been deactivated. Please contact support for assistance.',
                     'timestamp' => now()->toISOString(),
                     'code' => 403,
                     'error_code' => 'ACCOUNT_DEACTIVATED'
                 ], 403);
             }
 
-            // Check if company is active (if user belongs to a company)
-            if ($user->company_id && (!$user->company->is_active || $user->company->status !== 'approved')) {
+            // Check if vendor is active (if user belongs to a vendor)
+            if ($user->vendor_id && optional($user->vendor)->status !== 'active') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Company account is not active',
+                    'message' => 'Access denied. The associated vendor account is inactive. Please contact your administrator.',
                     'timestamp' => now()->toISOString(),
                     'code' => 403,
-                    'error_code' => 'COMPANY_INACTIVE'
+                    'error_code' => 'VENDOR_INACTIVE'
                 ], 403);
             }
-
         } catch (TokenExpiredException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Token has expired. Please log in again.',
+                'message' => 'Authentication session expired. Please re-authenticate to continue.',
                 'timestamp' => now()->toISOString(),
                 'code' => 401,
-                'error_code' => 'TOKEN_EXPIRED'
+                'error_code' => 'AUTH_TOKEN_EXPIRED'
             ], 401);
-            
         } catch (TokenInvalidException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid token. Token signature could not be verified.',
+                'message' => 'Authentication failed. The provided access token is invalid or could not be verified.',
                 'timestamp' => now()->toISOString(),
                 'code' => 401,
-                'error_code' => 'TOKEN_INVALID'
+                'error_code' => 'AUTH_TOKEN_INVALID'
             ], 401);
-            
         } catch (JWTException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Token is required.',
+                'message' => 'Authentication token missing. Please include a valid access token in the request header.',
                 'timestamp' => now()->toISOString(),
                 'code' => 401,
-                'error_code' => 'TOKEN_ABSENT'
+                'error_code' => 'AUTH_TOKEN_MISSING'
             ], 401);
         }
+
 
         return $next($request);
     }

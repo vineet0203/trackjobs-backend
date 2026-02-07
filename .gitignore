@@ -9,6 +9,8 @@ node_modules/
 /storage/framework/cache/*
 /storage/framework/sessions/*
 /storage/framework/views/*
+/storage/app/private/*
+!/storage/app/private/.gitignore
 /bootstrap/cache/*
 .idea/
 *.log

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Client\ClientController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\DeploymentController;
+use App\Http\Controllers\Api\V1\Quotes\QuoteController;
 use App\Http\Controllers\Api\V1\SignedFileController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Services\RequestAnalyticsService;
@@ -87,6 +88,18 @@ Route::middleware(['jwt.verify'])->group(function () {
         Route::delete('{vendorId}/clients/{clientId}', [ClientController::class, 'removeClient']);
     });
 
+    Route::prefix('quotes')->group(function () {
+        Route::get('/', [QuoteController::class, 'index']);
+        Route::get('/statistics', [QuoteController::class, 'statistics']);
+        Route::get('/number/{quoteNumber}', [QuoteController::class, 'showByNumber']);
+        Route::post('/', [QuoteController::class, 'store']);
+        Route::get('/{id}', [QuoteController::class, 'show']);
+        Route::put('/{id}', [QuoteController::class, 'update']);
+        Route::delete('/{id}', [QuoteController::class, 'destroy']);
+        Route::post('/{id}/send', [QuoteController::class, 'send']);
+        Route::post('/{id}/follow-up-status', [QuoteController::class, 'updateFollowUpStatus']);
+    });
+
     // Upload routes
     Route::prefix('uploads')->group(function () {
         Route::post('/temp', [UploadController::class, 'uploadTemporary']);
@@ -96,13 +109,6 @@ Route::middleware(['jwt.verify'])->group(function () {
 
 // Signed URL routes
 Route::prefix('files')->group(function () {
-    // Generate signed URLs (requires auth)
-    Route::middleware(['jwt.verify'])->group(function () {
-        Route::post('/signed/temp', [SignedFileController::class, 'generateTemporarySignedUrl']);
-        Route::post('/signed/public', [SignedFileController::class, 'generatePublicSignedUrl']);
-        Route::post('/signed/private', [SignedFileController::class, 'generatePrivateSignedUrl']);
-    });
-
     // Serve signed files (no auth required - URL itself is the auth)
     Route::get('/signed/{signature}', [SignedFileController::class, 'serveSigned'])
         ->name('api.v1.files.signed');

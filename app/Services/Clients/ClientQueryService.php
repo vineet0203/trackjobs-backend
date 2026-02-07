@@ -46,7 +46,7 @@ class ClientQueryService
     {
         return Client::where('vendor_id', $vendorId)
             ->where('id', $clientId)
-            ->with(['vendor', 'user', 'createdByUser', 'updatedByUser'])
+            ->with(['vendor', 'user'])
             ->first();
     }
 
@@ -187,13 +187,13 @@ class ClientQueryService
     {
         return $query->where(function ($q) use ($searchTerm) {
             $q->where('business_name', 'like', '%' . $searchTerm . '%')
-              ->orWhere('contact_person_name', 'like', '%' . $searchTerm . '%')
-              ->orWhere('email', 'like', '%' . $searchTerm . '%')
-              ->orWhere('mobile_number', 'like', '%' . $searchTerm . '%')
-              ->orWhere('alternate_mobile_number', 'like', '%' . $searchTerm . '%')
-              ->orWhere('business_registration_number', 'like', '%' . $searchTerm . '%')
-              ->orWhere('tax_id', 'like', '%' . $searchTerm . '%')
-              ->orWhere('website_url', 'like', '%' . $searchTerm . '%');
+                ->orWhere('contact_person_name', 'like', '%' . $searchTerm . '%')
+                ->orWhere('email', 'like', '%' . $searchTerm . '%')
+                ->orWhere('mobile_number', 'like', '%' . $searchTerm . '%')
+                ->orWhere('alternate_mobile_number', 'like', '%' . $searchTerm . '%')
+                ->orWhere('business_registration_number', 'like', '%' . $searchTerm . '%')
+                ->orWhere('tax_id', 'like', '%' . $searchTerm . '%')
+                ->orWhere('website_url', 'like', '%' . $searchTerm . '%');
         });
     }
 
@@ -203,9 +203,17 @@ class ClientQueryService
     private function applySorting(Builder $query, string $sortBy, string $sortOrder): Builder
     {
         $allowedSortFields = [
-            'id', 'business_name', 'contact_person_name', 'email', 
-            'created_at', 'updated_at', 'status', 'client_category', 
-            'business_type', 'city', 'country'
+            'id',
+            'business_name',
+            'contact_person_name',
+            'email',
+            'created_at',
+            'updated_at',
+            'status',
+            'client_category',
+            'business_type',
+            'city',
+            'country'
         ];
 
         if (in_array($sortBy, $allowedSortFields)) {
@@ -222,8 +230,16 @@ class ClientQueryService
     {
         $appliedFilters = [];
         $filterableFields = [
-            'business_type', 'industry', 'client_category', 'status', 
-            'is_verified', 'city', 'state', 'country', 'created_from', 'created_to'
+            'business_type',
+            'industry',
+            'client_category',
+            'status',
+            'is_verified',
+            'city',
+            'state',
+            'country',
+            'created_from',
+            'created_to'
         ];
 
         foreach ($filterableFields as $field) {

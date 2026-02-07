@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 class SignedUrlService
 {
     /**
-     * Generate a signed URL for temporary file
+     * Generate a signed URL for any file
      */
     public function generateTemporarySignedUrl(
         string $path,
@@ -26,53 +26,134 @@ class SignedUrlService
                 return null;
             }
 
-            // Find temporary upload record
-            $tempUpload = TemporaryUpload::where('storage_path', $path)
-                ->where('is_used', false)
-                ->where('expires_at', '>', Carbon::now())
-                ->first();
+            // Check if this is a temp path or permanent path
+            $isTempPath = str_starts_with($path, 'temp/');
+            $isPrivatePath = str_starts_with($path, 'private/');
 
-            if (!$tempUpload) {
-                Log::warning('Temporary file not found or expired', ['path' => $path]);
-                return null;
+            if ($isTempPath) {
+                // This is a temporary file path
+                return $this->generateSignedUrlForTempFile($path, $expirationMinutes);
+            } else {
+                // This is a permanent file path (could be in private/ or other directories)
+                return $this->generateSignedUrlForPermanentFile($path, $expirationMinutes);
             }
-
-            // Generate signed URL with all parameters
-            $signedUrl = $this->generateSignedUrl([
-                'type' => 'temporary',
-                'path' => $tempUpload->storage_path,
-                'filename' => $tempUpload->original_name,
-                'temp_id' => $tempUpload->temp_id,
-            ], $expirationMinutes);
-
-            if (!$signedUrl) {
-                return null;
-            }
-
-            // Log access
-            Log::info('Signed URL generated for temporary file', [
-                'temp_id' => $tempUpload->temp_id,
-                'path' => $path,
-                'expires_in_minutes' => $expirationMinutes,
-                'user_id' => auth()->id(),
-            ]);
-
-            return [
-                'url' => $signedUrl,
-                'expires_at' => now()->addMinutes($expirationMinutes)->toISOString(),
-                'filename' => $tempUpload->original_name,
-                'size' => $tempUpload->size,
-                'mime_type' => $tempUpload->mime_type,
-                'temp_id' => $tempUpload->temp_id,
-            ];
         } catch (\Exception $e) {
-            Log::error('Error generating signed URL for temporary file', [
+            Log::error('Error generating signed URL for file', [
                 'path' => $path,
                 'error' => $e->getMessage(),
             ]);
             return null;
         }
     }
+
+    /**
+     * Generate signed URL for temporary file
+     */
+    private function generateSignedUrlForTempFile(
+        string $path,
+        int $expirationMinutes
+    ): ?array {
+        // Find temporary upload record by storage_path
+        $tempUpload = TemporaryUpload::where('storage_path', $path)
+            ->where('is_used', false)
+            ->where('expires_at', '>', Carbon::now())
+            ->first();
+
+        if (!$tempUpload) {
+            Log::warning('Temporary file not found or expired', ['path' => $path]);
+            return null;
+        }
+
+        // Generate signed URL
+        $signedUrl = $this->generateSignedUrl([
+            'type' => 'temporary',
+            'path' => $tempUpload->storage_path,
+            'filename' => $tempUpload->original_name,
+            'temp_id' => $tempUpload->temp_id,
+            'disk' => 'local', // All temp files are on local disk
+        ], $expirationMinutes);
+
+        if (!$signedUrl) {
+            return null;
+        }
+
+        Log::info('Signed URL generated for temporary file', [
+            'temp_id' => $tempUpload->temp_id,
+            'path' => $path,
+            'expires_in_minutes' => $expirationMinutes,
+        ]);
+
+        return [
+            'url' => $signedUrl,
+            'expires_at' => now()->addMinutes($expirationMinutes)->toISOString(),
+            'filename' => $tempUpload->original_name,
+            'size' => $tempUpload->size,
+            'mime_type' => $tempUpload->mime_type,
+            'temp_id' => $tempUpload->temp_id,
+        ];
+    }
+
+
+    /**
+     * Generate signed URL for permanent file
+     */
+    private function generateSignedUrlForPermanentFile(
+        string $path,
+        int $expirationMinutes
+    ): ?array {
+        Log::info('=== GENERATE SIGNED URL FOR PERMANENT FILE ===', [
+            'path' => $path,
+            'is_private' => str_starts_with($path, 'private/'),
+        ]);
+
+        // All permanent files are on local disk, just in different directories
+        $disk = Storage::disk('local');
+        $diskName = 'local';
+
+        // Check if file exists
+        if (!$disk->exists($path)) {
+            Log::warning('Permanent file not found', [
+                'path' => $path,
+                'disk' => $diskName,
+                'full_path' => $disk->path($path),
+                'directory_exists' => $disk->exists(dirname($path)),
+                'files_in_directory' => $disk->files(dirname($path)),
+            ]);
+            return null;
+        }
+
+        // Get file info
+        $size = $disk->size($path);
+        $mimeType = $disk->mimeType($path);
+        $filename = basename($path);
+
+        // Generate signed URL for permanent file
+        $signedUrl = $this->generateSignedUrl([
+            'type' => 'permanent',
+            'path' => $path,
+            'filename' => $filename,
+            'disk' => $diskName, // Always 'local' for private files
+        ], $expirationMinutes);
+
+        if (!$signedUrl) {
+            return null;
+        }
+
+        Log::info('Signed URL generated for permanent (private) file', [
+            'path' => $path,
+            'disk' => $diskName,
+            'expires_in_minutes' => $expirationMinutes,
+        ]);
+
+        return [
+            'url' => $signedUrl,
+            'expires_at' => now()->addMinutes($expirationMinutes)->toISOString(),
+            'filename' => $filename,
+            'size' => $size,
+            'mime_type' => $mimeType,
+        ];
+    }
+
 
     /**
      * Generate signed URL for parameters
@@ -85,10 +166,9 @@ class SignedUrlService
         // Sort parameters alphabetically
         ksort($params);
 
-        // Build query string WITHOUT urlencoding (use raw parameters)
-        $queryString = $this->buildQueryString($params);
+        Log::info('Generating signed URL with params', $params);
 
-        // Generate signature from the raw query string
+        // Generate signature from the parameters
         $signature = $this->generateSignature($params);
 
         // Add signature to parameters
@@ -98,20 +178,16 @@ class SignedUrlService
         $routeSignature = hash('sha256', json_encode($params));
 
         // Build final URL
-        return url("/api/v1/files/signed/{$routeSignature}") . '?' . http_build_query($params);
+        $url = url("/api/v1/files/signed/{$routeSignature}") . '?' . http_build_query($params);
+
+        Log::info('Generated signed URL', [
+            'url' => $url,
+            'disk_param' => $params['disk'] ?? 'not_set',
+        ]);
+
+        return $url;
     }
 
-    /**
-     * Build query string without urlencoding values
-     */
-    private function buildQueryString(array $params): string
-    {
-        $parts = [];
-        foreach ($params as $key => $value) {
-            $parts[] = $key . '=' . $value;
-        }
-        return implode('&', $parts);
-    }
 
     /**
      * Generate signature from parameters
@@ -144,6 +220,7 @@ class SignedUrlService
             $path = $request->query('path');
             $filename = $request->query('filename', basename($path));
             $tempId = $request->query('temp_id');
+            $diskName = $request->query('disk', 'local'); // Always 'local' now
             $expires = $request->query('expires');
 
             // Validate required parameters
@@ -185,12 +262,26 @@ class SignedUrlService
                     'expected' => $expectedSignature,
                     'received' => $requestSignature,
                     'params' => $verifyParams,
-                    'string_to_sign' => $this->getStringToSign($verifyParams),
                 ]);
                 return null;
             }
 
-            // For temporary files, validate the file exists and is not expired
+            // Determine disk - always local for private files
+            $disk = Storage::disk($diskName);
+
+            if (!$disk->exists($path)) {
+                Log::warning('File not found in storage', [
+                    'type' => $type,
+                    'path' => $path,
+                    'disk' => $diskName,
+                    'full_path' => $disk->path($path),
+                    'directory_exists' => $disk->exists(dirname($path)),
+                    'files_in_parent' => $disk->files(dirname($path)),
+                ]);
+                return null;
+            }
+
+            // For temporary files, also validate the temp_id
             if ($type === 'temporary' && $tempId) {
                 $tempUpload = TemporaryUpload::where('temp_id', $tempId)
                     ->where('is_used', false)
@@ -202,38 +293,11 @@ class SignedUrlService
                         'temp_id' => $tempId,
                         'path' => $path,
                     ]);
-
-                    // Debug: List all temporary uploads
-                    $allTempUploads = TemporaryUpload::select('temp_id', 'storage_path', 'is_used', 'expires_at')
-                        ->where('created_at', '>', now()->subDay())
-                        ->get()
-                        ->toArray();
-
-                    Log::warning('Recent temporary uploads', $allTempUploads);
-
                     return null;
                 }
 
                 // Use the original filename from the database
                 $filename = $tempUpload->original_name;
-            }
-
-            // Determine disk based on type
-            $disk = match ($type) {
-                'public' => Storage::disk('public'),
-                'private' => Storage::disk('local'),
-                'temporary' => Storage::disk('local'),
-                default => Storage::disk('local'),
-            };
-
-            if (!$disk->exists($path)) {
-                Log::warning('File not found in storage', [
-                    'type' => $type,
-                    'path' => $path,
-                    'disk_root' => $disk->path(''),
-                    'storage_files' => $this->listStorageFiles($disk, dirname($path)),
-                ]);
-                return null;
             }
 
             $mimeType = $disk->mimeType($path);
@@ -262,6 +326,7 @@ class SignedUrlService
                 'path' => $path,
                 'filename' => $filename,
                 'mime_type' => $mimeType,
+                'disk' => $diskName,
             ]);
 
             return $disk->download($path, $filename, [
@@ -280,30 +345,6 @@ class SignedUrlService
         }
     }
 
-    /**
-     * Helper to get string to sign for debugging
-     */
-    private function getStringToSign(array $params): string
-    {
-        ksort($params);
-        $stringToSign = '';
-        foreach ($params as $key => $value) {
-            $stringToSign .= $key . '=' . $value . '&';
-        }
-        return rtrim($stringToSign, '&');
-    }
-
-    /**
-     * List files in storage for debugging
-     */
-    private function listStorageFiles($disk, string $directory): array
-    {
-        try {
-            return $disk->files($directory);
-        } catch (\Exception $e) {
-            return ['error' => $e->getMessage()];
-        }
-    }
 
     /**
      * Check for path traversal attempts
@@ -311,36 +352,5 @@ class SignedUrlService
     private function containsPathTraversal(string $path): bool
     {
         return Str::contains($path, ['..', '//', '\\', '%2e%2e', '%252e%252e']);
-    }
-
-    /**
-     * Debug method to check what's happening with a specific URL
-     */
-    public function debugSignedUrl(string $url): array
-    {
-        $parsedUrl = parse_url($url);
-        parse_str($parsedUrl['query'] ?? '', $queryParams);
-
-        // Recreate signature
-        $signatureParams = $queryParams;
-        unset($signatureParams['signature']);
-        ksort($signatureParams);
-
-        $stringToSign = $this->getStringToSign($signatureParams);
-        $expectedSignature = hash_hmac('sha256', $stringToSign, config('app.key'));
-
-        return [
-            'url' => $url,
-            'parsed_query' => $queryParams,
-            'string_to_sign' => $stringToSign,
-            'expected_signature' => $expectedSignature,
-            'actual_signature' => $queryParams['signature'] ?? null,
-            'signature_matches' => hash_equals($expectedSignature, $queryParams['signature'] ?? ''),
-            'expires_timestamp' => $queryParams['expires'] ?? null,
-            'expires_human' => isset($queryParams['expires']) ?
-                Carbon::createFromTimestamp($queryParams['expires'])->toDateTimeString() : null,
-            'is_expired' => isset($queryParams['expires']) &&
-                Carbon::createFromTimestamp($queryParams['expires'])->isPast(),
-        ];
     }
 }

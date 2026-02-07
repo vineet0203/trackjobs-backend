@@ -63,7 +63,6 @@ class ClientController extends BaseController
                 new ClientResource($client),
                 'Client added successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== ADD CLIENT END ===', [
                 'status' => 'error',
@@ -112,7 +111,6 @@ class ClientController extends BaseController
                     'filters' => $appliedFilters,
                 ]
             );
-
         } catch (\Exception $e) {
             Log::error('=== GET VENDOR CLIENTS END ===', [
                 'vendor_id' => $vendorId,
@@ -133,10 +131,6 @@ class ClientController extends BaseController
     public function getVendorClient(int $vendorId, int $clientId): JsonResponse
     {
         try {
-            Log::info('=== GET VENDOR CLIENT START ===', [
-                'vendor_id' => $vendorId,
-                'client_id' => $clientId,
-            ]);
 
             $client = $this->clientQueryService->getClient($vendorId, $clientId);
 
@@ -158,7 +152,6 @@ class ClientController extends BaseController
                 new ClientResource($client),
                 'Client retrieved successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== GET VENDOR CLIENT END ===', [
                 'vendor_id' => $vendorId,
@@ -188,13 +181,14 @@ class ClientController extends BaseController
                 'user_agent' => $request->userAgent()
             ]);
 
+            // Check if client exists BEFORE validation
             $client = $this->clientQueryService->getClient($vendorId, $clientId);
 
             if (!$client) {
                 return $this->notFoundResponse('Client not found.');
             }
 
-            // Request is automatically validated by UpdateClientRequest
+            // Now run validation since we know client exists
             $validatedData = $request->validated();
             $client = $this->clientUpdateService->update($client, $validatedData, auth()->id());
 
@@ -207,7 +201,6 @@ class ClientController extends BaseController
                 new ClientResource($client),
                 'Client updated successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== MODIFY CLIENT END ===', [
                 'vendor_id' => $vendorId,
@@ -243,7 +236,7 @@ class ClientController extends BaseController
 
             // Check if client can be deleted
             $canDelete = $this->clientDeletionService->canDelete($client);
-            
+
             if (!$canDelete['can_delete']) {
                 return $this->errorResponse(
                     $canDelete['message'],
@@ -262,7 +255,6 @@ class ClientController extends BaseController
                 null,
                 'Client deleted successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== REMOVE CLIENT END ===', [
                 'vendor_id' => $vendorId,

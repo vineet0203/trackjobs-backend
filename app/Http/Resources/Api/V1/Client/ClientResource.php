@@ -2,12 +2,17 @@
 
 namespace App\Http\Resources\Api\V1\Client;
 
+
+use App\Services\File\SignedUrlService;
+use App\Traits\HasSignedUrl;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class ClientResource extends JsonResource
 {
+    use HasSignedUrl;
     public function toArray($request)
     {
+
         return [
             'id' => $this->id,
             'vendor_id' => $this->vendor_id,
@@ -49,7 +54,7 @@ class ClientResource extends JsonResource
                 'tax_id' => $this->tax_id,
             ],
             'website_url' => $this->website_url,
-            'logo_path' => $this->logo_path,
+            'logo' => $this->getSignedUrlData($this->logo_path),
             'client_category' => $this->client_category,
             'notes' => $this->notes,
             'status' => $this->status,

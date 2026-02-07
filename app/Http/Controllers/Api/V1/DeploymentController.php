@@ -14,7 +14,7 @@ use App\Services\RequestAnalyticsService;
 use App\Services\TelegramService;
 use App\Traits\TracksRequestAnalytics;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Schema;
 
@@ -154,7 +154,13 @@ class DeploymentController extends Controller
         $backupPath = null;
         if (config('github.deployment.enable_backups', true)) {
             $backupPath = $this->createBackup();
+
+            // Clean up old backups after creating new one
+            if ($backupPath) {
+                $this->cleanupOldBackups(7); // Keep last 7 days
+            }
         }
+
 
         Log::info('Starting deployment', [
             'branch' => $payload['ref'],
@@ -670,6 +676,99 @@ class DeploymentController extends Controller
     {
         if ($this->lockFile && file_exists($this->lockFile)) {
             unlink($this->lockFile);
+        }
+    }
+
+    /**
+     * Clean up old backups, keeping only the last 7 days
+     */
+    private function cleanupOldBackups(int $daysToKeep = 7): void
+    {
+        try {
+            $backupDir = storage_path('backups');
+
+            if (!file_exists($backupDir)) {
+                return;
+            }
+
+            $allBackups = scandir($backupDir);
+            $deletedCount = 0;
+            $keptCount = 0;
+
+            $cutoffDate = now()->subDays($daysToKeep);
+
+            foreach ($allBackups as $backupFolder) {
+                if ($backupFolder === '.' || $backupFolder === '..') {
+                    continue;
+                }
+
+                $backupPath = $backupDir . '/' . $backupFolder;
+
+                // Extract date from folder name (format: YYYY-MM-DD_HH-MM-SS)
+                if (preg_match('/^(\d{4})-(\d{2})-(\d{2})_(\d{2})-(\d{2})-(\d{2})$/', $backupFolder, $matches)) {
+                    $year = (int)$matches[1];
+                    $month = (int)$matches[2];
+                    $day = (int)$matches[3];
+
+                    $backupDate = Carbon::create($year, $month, $day);
+
+                    if ($backupDate->lt($cutoffDate)) {
+                        // Delete old backup
+                        $this->deleteBackupFolder($backupPath);
+                        $deletedCount++;
+                        Log::info('Deleted old backup', ['folder' => $backupFolder]);
+                    } else {
+                        $keptCount++;
+                    }
+                } else {
+                    Log::warning('Invalid backup folder name format', ['folder' => $backupFolder]);
+                }
+            }
+
+            Log::info('Backup cleanup completed', [
+                'deleted' => $deletedCount,
+                'kept' => $keptCount,
+                'total' => count($allBackups) - 2, // Subtract . and ..
+                'cutoff_date' => $cutoffDate->toDateString(),
+                'days_to_keep' => $daysToKeep
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Backup cleanup failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * Safely delete a backup folder and all its contents
+     */
+    private function deleteBackupFolder(string $path): bool
+    {
+        if (!file_exists($path) || !is_dir($path)) {
+            return false;
+        }
+
+        try {
+            // Delete all files in the directory
+            $files = array_diff(scandir($path), ['.', '..']);
+            foreach ($files as $file) {
+                $filePath = $path . '/' . $file;
+                if (is_dir($filePath)) {
+                    $this->deleteBackupFolder($filePath);
+                } else {
+                    unlink($filePath);
+                }
+            }
+
+            // Delete the directory itself
+            return rmdir($path);
+        } catch (\Exception $e) {
+            Log::error('Failed to delete backup folder', [
+                'path' => $path,
+                'error' => $e->getMessage()
+            ]);
+            return false;
         }
     }
 

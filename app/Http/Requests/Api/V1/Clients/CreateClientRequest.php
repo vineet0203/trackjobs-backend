@@ -1,7 +1,9 @@
 <?php
+// app/Http/Requests/Api/V1/Clients/CreateClientRequest.php
 
 namespace App\Http\Requests\Api\V1\Clients;
 
+use App\Services\File\FileValidationRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,10 +18,10 @@ class CreateClientRequest extends FormRequest
     {
         $vendorId = $this->route('vendorId') ?? $this->vendor_id;
 
-        return [
+        // Build rules array
+        $rules = [
             // Vendor relationship (should come from route/auth context, not form)
             'vendor_id' => 'required|exists:vendors,id',
-            //'user_id' => 'nullable|exists:users,id',
 
             // 1. Basic Business Information
             'business_name' => [
@@ -73,17 +75,6 @@ class CreateClientRequest extends FormRequest
 
             // 5. Additional Business Details
             'website_url' => 'nullable|url|max:191',
-            // Temporary upload ID for logo
-            'logo_temp_id' => [
-                'nullable',
-                'string',
-                function ($attribute, $value, $fail) {
-                    // Add custom validation for temp_id
-                    if ($value && !preg_match('/^tmp_[a-zA-Z0-9_]+$/', $value)) {
-                        $fail('Invalid temporary upload ID format.');
-                    }
-                },
-            ],
             'client_category' => 'required|in:premium,regular,vip,strategic,new,at_risk',
             'notes' => 'nullable|string',
 
@@ -91,6 +82,19 @@ class CreateClientRequest extends FormRequest
             'status' => 'required|in:active,inactive,suspended,archived',
             'is_verified' => 'nullable|boolean',
         ];
+
+        // Add logo_temp_id validation using reusable rules
+        // Note: We need to get the value from the request, not from $this->logo_temp_id
+        $logoRules = FileValidationRules::tempId(
+            fieldName: 'logo_temp_id',
+            allowedTypes: FileValidationRules::getAllowedMimeTypes('images'),
+            maxSizeKb: FileValidationRules::getSizeLimits('images')
+        );
+        
+        // Merge the logo rules
+        $rules = array_merge($rules, $logoRules);
+
+        return $rules;
     }
 
     public function messages(): array
@@ -145,17 +149,58 @@ class CreateClientRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        // Get the raw input value for logo_temp_id before any modification
+        $rawLogoId = $this->input('logo_temp_id') ?: $this->input('logoTempId');
+        
         $this->merge([
             'vendor_id' => $this->route('vendorId') ?? $this->vendor_id,
             'same_as_business_address' => filter_var($this->same_as_business_address ?? true, FILTER_VALIDATE_BOOLEAN),
             'is_verified' => filter_var($this->is_verified ?? false, FILTER_VALIDATE_BOOLEAN),
             'tax_percentage' => $this->tax_percentage ? (float) $this->tax_percentage : null,
-            'logo_temp_id' => $this->logo_temp_id ?: ($this->logoTempId ?: null),
+            
+            // Use raw input value, don't override with null
+            'logo_temp_id' => $rawLogoId ?: null,
 
-            // Clean up website URL
-            'website_url' => $this->website_url ?
-                (strpos($this->website_url, 'http') !== 0 ? 'https://' . $this->website_url : $this->website_url)
-                : null,
+            // Clean up website URL - but check if it's actually a URL or a temp_id
+            'website_url' => $this->prepareWebsiteUrl($this->website_url),
         ]);
+    }
+
+    /**
+     * Prepare website URL - handle temp_id strings that look like URLs
+     */
+    private function prepareWebsiteUrl(?string $url): ?string
+    {
+        if (!$url) {
+            return null;
+        }
+
+        // Check if it looks like a temp_id (starts with tmp_)
+        if (str_starts_with($url, 'tmp_')) {
+            // This is likely a temp_id, not a URL
+            return null;
+        }
+
+        // Add https:// if no protocol specified
+        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
+            return 'https://' . $url;
+        }
+
+        return $url;
+    }
+
+    /**
+     * Get the validated data from the request
+     */
+    public function validated($key = null, $default = null)
+    {
+        $validated = parent::validated($key, $default);
+        
+        // Ensure logo_temp_id is preserved if it exists in input
+        if ($this->has('logo_temp_id')) {
+            $validated['logo_temp_id'] = $this->input('logo_temp_id');
+        }
+        
+        return $validated;
     }
 }

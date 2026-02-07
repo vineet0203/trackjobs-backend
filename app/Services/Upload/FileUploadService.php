@@ -1,4 +1,5 @@
 <?php
+// app/Services/Upload/FileUploadService.php
 
 namespace App\Services\Upload;
 
@@ -14,8 +15,9 @@ class FileUploadService
 {
     private string $tempDisk = 'local';
     private string $tempPath = 'temp/';
+    private string $permanentDisk = 'private';
 
-    // Allowed file types (size limit now handled by middleware)
+    // Allowed file types
     private array $allowedMimeTypes = [
         'image/jpeg',
         'image/jpg',
@@ -36,6 +38,7 @@ class FileUploadService
     /**
      * Upload temporary file
      */
+
     public function uploadTemporaryFile(UploadedFile $file, ?int $userId = null): array
     {
         // Validate file (MIME type only, no size check)
@@ -94,7 +97,7 @@ class FileUploadService
     }
 
     /**
-     * Get signed URL for temporary file
+     * Get signed URL for temporary file (using only generateTemporarySignedUrl)
      */
     public function getTemporarySignedUrl(string $tempId, int $expirationMinutes = 60): ?array
     {
@@ -107,6 +110,7 @@ class FileUploadService
             return null;
         }
 
+        // Use only generateTemporarySignedUrl
         return $this->signedUrlService->generateTemporarySignedUrl(
             $tempUpload->storage_path,
             $expirationMinutes
@@ -114,36 +118,23 @@ class FileUploadService
     }
 
     /**
-     * Get signed URL for permanent file
+     * Get signed URL for file (always use temporary method)
      */
     public function getPermanentSignedUrl(string $path, int $expirationMinutes = 60): ?array
     {
-        return $this->signedUrlService->generatePublicSignedUrl($path, $expirationMinutes);
+        // Always use generateTemporarySignedUrl
+        return $this->signedUrlService->generateTemporarySignedUrl($path, $expirationMinutes);
     }
 
     /**
-     * Get signed URL for private file
+     * Get signed URL for file (always use temporary method)
      */
     public function getPrivateSignedUrl(string $path, int $expirationMinutes = 60): ?array
     {
-        return $this->signedUrlService->generatePrivateSignedUrl($path, $expirationMinutes);
+        // Always use generateTemporarySignedUrl
+        return $this->signedUrlService->generateTemporarySignedUrl($path, $expirationMinutes);
     }
 
-    /**
-     * Format bytes to human-readable
-     */
-    private function formatBytes(int $bytes, int $precision = 2): string
-    {
-        $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-
-        $bytes = max($bytes, 0);
-        $pow = floor(($bytes ? log($bytes) : 0) / log(1024));
-        $pow = min($pow, count($units) - 1);
-
-        $bytes /= pow(1024, $pow);
-
-        return round($bytes, $precision) . ' ' . $units[$pow];
-    }
 
     /**
      * Get current PHP limits for debugging
@@ -218,7 +209,7 @@ class FileUploadService
     }
 
     /**
-     * Finalize temporary upload - move to permanent location
+     * Finalize temporary upload - move to permanent location (PRIVATE disk)
      */
     public function finalizeUpload(string $tempId, string $destinationPath, ?string $newFileName = null): array
     {
@@ -238,16 +229,44 @@ class FileUploadService
             );
         }
 
+        // Ensure destination path starts with 'private/' if not already
+        if (!str_starts_with($destinationPath, 'private/')) {
+            $destinationPath = 'private/' . ltrim($destinationPath, '/');
+        }
+
         $finalPath = rtrim($destinationPath, '/') . '/' . $newFileName;
 
+        Log::info('=== FINALIZE UPLOAD START ===', [
+            'temp_id' => $tempId,
+            'temp_path' => $tempUpload->storage_path,
+            'destination_path' => $destinationPath,
+            'final_path' => $finalPath,
+            'permanent_disk' => $this->permanentDisk,
+        ]);
+
         if (Storage::disk($this->tempDisk)->exists($tempUpload->storage_path)) {
-            $copied = Storage::disk('public')->put(
+            // Copy file to PRIVATE location (not public)
+            // Note: We're using 'local' disk for both temp and permanent, just different directories
+            $copied = Storage::disk('local')->put(
                 $finalPath,
                 Storage::disk($this->tempDisk)->get($tempUpload->storage_path)
             );
 
             if (!$copied) {
+                Log::error('Failed to copy file to private location', [
+                    'temp_path' => $tempUpload->storage_path,
+                    'final_path' => $finalPath,
+                ]);
                 throw new \Exception('Failed to copy file to permanent location');
+            }
+
+            // Verify the file was copied
+            if (!Storage::disk('local')->exists($finalPath)) {
+                Log::error('File not found after copy', [
+                    'final_path' => $finalPath,
+                    'disk' => 'local',
+                ]);
+                throw new \Exception('File was not copied successfully');
             }
 
             // Delete temp file
@@ -260,15 +279,17 @@ class FileUploadService
                 'used_at' => Carbon::now(),
             ]);
 
-            Log::info('Temporary file finalized', [
+            Log::info('Temporary file finalized to private storage', [
                 'temp_id' => $tempId,
                 'original_path' => $tempUpload->storage_path,
                 'final_path' => $finalPath,
                 'user_id' => $tempUpload->user_id,
+                'file_exists' => Storage::disk('local')->exists($finalPath),
+                'file_size' => Storage::disk('local')->size($finalPath),
             ]);
 
             // Generate signed URL for the permanent file
-            $signedUrlData = $this->signedUrlService->generatePublicSignedUrl($finalPath);
+            $signedUrlData = $this->signedUrlService->generateTemporarySignedUrl($finalPath);
 
             return [
                 'success' => true,

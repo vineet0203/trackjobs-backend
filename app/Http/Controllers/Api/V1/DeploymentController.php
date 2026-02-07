@@ -269,42 +269,52 @@ class DeploymentController extends Controller
                 mkdir($backupDir, 0755, true);
             }
 
-            // Use --no-tablespaces to avoid needing PROCESS privilege
-            $dbFile = "{$backupDir}/database.sql";
             $config = config('database.connections.mysql');
-            $dbUser = $config['username'];
-            $dbPass = $config['password'];
+            $dbUser = $config['username']; // Get from config (reads from .env)
+            $dbPass = $config['password']; // Get from config (reads from .env)
             $dbName = $config['database'];
+            $dbHost = $config['host'];
 
-            // Use MYSQL_PWD environment variable for security
-            $process = Process::fromShellCommandline(
-                "mysqldump --no-tablespaces --single-transaction --quick {$dbName} > {$dbFile}"
-            );
+            $dbFile = "{$backupDir}/database.sql";
+
+            // Method A: Pass credentials directly in command
+            $process = new Process([
+                'mysqldump',
+                '--host=' . $dbHost,
+                '--user=' . $dbUser,
+                '--password=' . $dbPass,
+                '--no-tablespaces',
+                '--single-transaction',
+                '--quick',
+                $dbName
+            ]);
 
             $process->setWorkingDirectory(base_path());
-            $process->setEnv([
-                'MYSQL_PWD' => $dbPass,
-                'MYSQL_USER' => $dbUser
-            ]);
             $process->setTimeout(300);
-            $process->run();
 
-            if (!$process->isSuccessful()) {
+            // Capture output to file
+            $process->start();
+            $process->wait();
+
+            if ($process->isSuccessful()) {
+                // Write output to file
+                file_put_contents($dbFile, $process->getOutput());
+
+                Log::info('Database backup created', [
+                    'size' => filesize($dbFile),
+                    'user' => $dbUser
+                ]);
+
+                // Backup .env
+                copy(base_path('.env'), "{$backupDir}/.env");
+
+                return $backupDir;
+            } else {
                 Log::error('Database backup failed', [
                     'error' => $process->getErrorOutput()
                 ]);
                 return null;
             }
-
-            Log::info('Database backup created', [
-                'size' => filesize($dbFile),
-                'command' => 'mysqldump --no-tablespaces'
-            ]);
-
-            // Backup .env
-            copy(base_path('.env'), "{$backupDir}/.env");
-
-            return $backupDir;
         } catch (\Exception $e) {
             Log::error('Backup failed', ['error' => $e->getMessage()]);
             return null;

@@ -33,23 +33,92 @@ class ClientUpdateService
                 'updated_by' => $updatedBy
             ]);
 
+            // Extract nested objects before processing
+            $updateData = [];
+
+            // Handle address object
+            if (isset($data['address']) && is_array($data['address'])) {
+                $updateData = array_merge($updateData, [
+                    'address_line_1' => $data['address']['address_line_1'] ?? null,
+                    'address_line_2' => $data['address']['address_line_2'] ?? null,
+                    'city' => $data['address']['city'] ?? null,
+                    'state' => $data['address']['state'] ?? null,
+                    'country' => $data['address']['country'] ?? null,
+                    'zip_code' => $data['address']['zip_code'] ?? null,
+                ]);
+                
+                Log::info('Address data extracted', [
+                    'address_line_2' => $data['address']['address_line_2'] ?? null
+                ]);
+            }
+
+            // Handle payment object
+            if (isset($data['payment']) && is_array($data['payment'])) {
+                $updateData = array_merge($updateData, [
+                    'payment_term' => $data['payment']['payment_term'] ?? null,
+                    'preferred_currency' => isset($data['payment']['preferred_currency']) 
+                        ? strtolower($data['payment']['preferred_currency']) 
+                        : null,
+                    'billing_name' => $data['payment']['billing_name'] ?? null,
+                ]);
+            }
+
+            // Handle tax object
+            if (isset($data['tax']) && is_array($data['tax'])) {
+                $updateData['tax_percentage'] = $data['tax']['tax_percentage'] ?? null;
+            }
+
+            // Add other flat fields directly
+            $flatFields = [
+                'client_type',
+                'first_name',
+                'last_name',
+                'business_name',
+                'business_type',
+                'industry',
+                'business_registration_number',
+                'contact_person_name',
+                'designation',
+                'email',
+                'mobile_number',
+                'alternate_mobile_number',
+                'website_url',
+                'client_category',
+                'notes',
+                'status',
+                'logo_temp_id',
+                'remove_logo'
+            ];
+
+            foreach ($flatFields as $field) {
+                if (array_key_exists($field, $data)) {
+                    $updateData[$field] = $data[$field];
+                }
+            }
+
             // Add updated_by
-            $data['updated_by'] = $updatedBy;
+            $updateData['updated_by'] = $updatedBy;
 
             // Extract availability data if present
             $availabilityData = $data['availability_schedule'] ?? null;
-            unset($data['availability_schedule']);
 
-            // Handle billing address logic
+            Log::info('Processed update data', [
+                'client_id' => $client->id,
+                'update_data_keys' => array_keys($updateData),
+                'has_address_line_2' => isset($updateData['address_line_2']),
+                'address_line_2_value' => $updateData['address_line_2'] ?? null
+            ]);
+
+            // Handle billing address logic (if needed)
             if (isset($data['same_as_business_address']) && $data['same_as_business_address']) {
-                $data = $this->copyBusinessAddressToBilling($data, $client);
+                $updateData = $this->copyBusinessAddressToBilling($updateData, $client);
             }
 
             // Handle logo updates using temporary upload ID
-            if (isset($data['logo_temp_id']) || isset($data['remove_logo'])) {
+            if (isset($updateData['logo_temp_id']) || isset($updateData['remove_logo'])) {
                 $errors = $this->fileAttachmentService->updateFile(
                     model: $client,
-                    data: $data,
+                    data: $updateData,
                     tempIdField: 'logo_temp_id',
                     pathField: 'logo_path',
                     destinationPath: 'clients/logos',
@@ -60,7 +129,6 @@ class ClientUpdateService
                             ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? ''))
                             ?? 'client'
                     ),
-
                     keepOriginalName: false,
                     removeField: 'remove_logo'
                 );
@@ -70,14 +138,18 @@ class ClientUpdateService
                 }
             }
 
+            // Remove logo_temp_id and remove_logo from update data as they're handled separately
+            unset($updateData['logo_temp_id']);
+            unset($updateData['remove_logo']);
+
             Log::info('Updating client with data', [
                 'client_id' => $client->id,
-                'data_keys' => array_keys($data),
-                'has_logo_path' => isset($data['logo_path']),
-                'logo_path' => $data['logo_path'] ?? null
+                'data_keys' => array_keys($updateData),
+                'has_logo_path' => isset($updateData['logo_path']),
+                'logo_path' => $updateData['logo_path'] ?? null
             ]);
 
-            $client->update($data);
+            $client->update($updateData);
             $client->refresh();
 
             // Update or create availability schedule if data provided
@@ -90,16 +162,20 @@ class ClientUpdateService
 
             DB::commit();
 
+            // Reload with relationships
+            $client->load('availabilitySchedules');
+
             Log::info('Client updated successfully', [
                 'client_id' => $client->id,
                 'vendor_id' => $client->vendor_id,
-                'updated_fields' => array_keys($data),
+                'updated_fields' => array_keys($updateData),
                 'has_logo' => !empty($client->logo_path),
                 'logo_path' => $client->logo_path,
+                'address_line_2' => $client->address_line_2,
                 'updated_by' => $updatedBy,
             ]);
 
-            return $client->load('availabilitySchedules');
+            return $client;
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -232,22 +308,8 @@ class ClientUpdateService
      */
     public function updateAddress(Client $client, array $addressData, int $updatedBy): Client
     {
-        $allowedFields = [
-            'address_line_1',
-            'address_line_2',
-            'city',
-            'state',
-            'country',
-            'zip_code',
-        ];
-
-        $data = array_intersect_key($addressData, array_flip($allowedFields));
-
-        if (!empty($data)) {
-            return $this->update($client, $data, $updatedBy);
-        }
-
-        return $client;
+        $data = ['address' => $addressData];
+        return $this->update($client, $data, $updatedBy);
     }
 
     /**
@@ -255,19 +317,8 @@ class ClientUpdateService
      */
     public function updatePaymentTerms(Client $client, array $paymentData, int $updatedBy): Client
     {
-        $allowedFields = [
-            'payment_term',
-            'preferred_currency',
-            'tax_percentage',
-        ];
-
-        $data = array_intersect_key($paymentData, array_flip($allowedFields));
-
-        if (!empty($data)) {
-            return $this->update($client, $data, $updatedBy);
-        }
-
-        return $client;
+        $data = ['payment' => $paymentData];
+        return $this->update($client, $data, $updatedBy);
     }
 
     /**
@@ -321,40 +372,17 @@ class ClientUpdateService
      */
     public function batchUpdate(Client $client, array $updates, int $updatedBy): Client
     {
-        $allowedFields = [
-            'business_name',
-            'business_type',
-            'industry',
-            'business_registration_number',
-            'contact_person_name',
-            'designation',
-            'email',
-            'mobile_number',
-            'alternate_mobile_number',
-            'address_line_1',
-            'address_line_2',
-            'city',
-            'state',
-            'country',
-            'zip_code',
-            'billing_name',
-            'payment_term',
-            'preferred_currency',
-            'tax_percentage',
-            'website_url',
-            'client_category',
-            'notes',
-            'status',
-            'logo_temp_id',
-            'remove_logo'
-        ];
+        return $this->update($client, $updates, $updatedBy);
+    }
 
-        $filteredData = array_intersect_key($updates, array_flip($allowedFields));
-
-        if (!empty($filteredData)) {
-            return $this->update($client, $filteredData, $updatedBy);
-        }
-
-        return $client;
+    /**
+     * Copy business address to billing address
+     */
+    private function copyBusinessAddressToBilling(array $data, Client $client): array
+    {
+        $data['billing_name'] = $data['billing_name'] ?? $client->billing_name ?? $client->business_name;
+        // Add any other billing address fields if they exist in your schema
+        
+        return $data;
     }
 }

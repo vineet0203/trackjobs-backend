@@ -22,7 +22,6 @@ class ClientResource extends JsonResource
             'client_type' => $this->client_type ?? 'commercial',
             'first_name' => $this->first_name ?? null,
             'last_name' => $this->last_name ?? null,
-            'residential_address' =>$this->residential_address,
             'business_name' => $this->business_name,
             'business_type' => $this->business_type,
             'industry' => $this->industry,

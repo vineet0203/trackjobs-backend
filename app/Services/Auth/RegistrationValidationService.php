@@ -53,10 +53,10 @@ class RegistrationValidationService
             throw new \Exception("Business name must be at least 2 characters long");
         }
 
-        // // Validate website format
-        // if (!filter_var($data['website_name'], FILTER_VALIDATE_URL)) {
-        //     throw new \Exception("Please enter a valid website URL");
-        // }
+        // Validate website format
+        if (!filter_var($data['website_name'], FILTER_VALIDATE_URL)) {
+            throw new \Exception("Please enter a valid website URL");
+        }
 
         // Validate business type if provided
         if (isset($data['business_type']) && !in_array($data['business_type'], ['plumbing', 'carpentry', 'electrical', 'cleaning', 'other'])) {
@@ -110,9 +110,9 @@ class RegistrationValidationService
         }
 
         // Check if mobile number already exists in vendor table (optional)
-        // if (Vendor::where('mobile_number', $data['mobile_number'])->exists()) {
-        //     throw new \Exception('Mobile number "' . $data['mobile_number'] . '" is already registered');
-        // }
+        if (Vendor::where('mobile_number', $data['mobile_number'])->exists()) {
+            throw new \Exception('Mobile number "' . $data['mobile_number'] . '" is already registered');
+        }
     }
 
     private function validatePasswordStrength(string $password): void

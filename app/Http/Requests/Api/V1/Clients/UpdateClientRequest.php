@@ -39,10 +39,9 @@ class UpdateClientRequest extends FormRequest
     {
         $vendorId = $this->route('vendorId');
         $clientId = $this->route('clientId');
-        $days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-        return [
-
+        $rules = [
             /*
             |--------------------------------------------------------------------------
             | Client Type
@@ -52,16 +51,55 @@ class UpdateClientRequest extends FormRequest
 
             /*
             |--------------------------------------------------------------------------
-            | Residential Fields (Optional)
+            | Contact Fields (common for both types)
             |--------------------------------------------------------------------------
             */
-            'first_name' => 'nullable|string|max:191|exclude_unless:client_type,residential',
-            'last_name'  => 'nullable|string|max:191|exclude_unless:client_type,residential',
-            'residential_address'    => 'nullable|string|exclude_unless:client_type,residential',
+            'email' => [
+                'nullable',
+                'email',
+                'max:191',
+                Rule::unique('clients')
+                    ->where(fn($q) => $q->where('vendor_id', $vendorId)
+                        ->where('id', '!=', $clientId)
+                        ->whereNull('deleted_at'))
+            ],
+            'mobile_number' => 'nullable|string|max:20',
+            'alternate_mobile_number' => 'nullable|string|max:20',
 
             /*
             |--------------------------------------------------------------------------
-            | Commercial Fields (Optional)
+            | Address Object (common for both types)
+            |--------------------------------------------------------------------------
+            */
+            'address' => 'nullable|array',
+            'address.address_line_1' => 'nullable|string|max:191',
+            'address.address_line_2' => 'nullable|string|max:191',
+            'address.city' => 'nullable|string|max:191',
+            'address.state' => 'nullable|string|max:191',
+            'address.country' => 'nullable|string|max:191',
+            'address.zip_code' => 'nullable|string|max:20',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Residential Fields (only allowed if residential)
+            |--------------------------------------------------------------------------
+            */
+            'first_name' => [
+                'nullable',
+                'string',
+                'max:191',
+                'exclude_unless:client_type,residential'
+            ],
+            'last_name' => [
+                'nullable',
+                'string',
+                'max:191',
+                'exclude_unless:client_type,residential'
+            ],
+
+            /*
+            |--------------------------------------------------------------------------
+            | Commercial Business Fields (only allowed if commercial)
             |--------------------------------------------------------------------------
             */
             'business_name' => [
@@ -70,57 +108,58 @@ class UpdateClientRequest extends FormRequest
                 'max:191',
                 'exclude_unless:client_type,commercial',
                 Rule::unique('clients')
-                    ->where(fn($q) => $q->where('vendor_id',$vendorId)
-                        ->where('id','!=',$clientId)
+                    ->where(fn($q) => $q->where('vendor_id', $vendorId)
+                        ->where('id', '!=', $clientId)
                         ->whereNull('deleted_at'))
             ],
 
-            'business_type' => 'nullable|in:individual,sole_proprietorship,partnership,llc,corporation,non_profit,government,other|exclude_unless:client_type,commercial',
-            'industry' => 'nullable|in:technology,retail,healthcare,finance,manufacturing,construction,education,hospitality,transportation,other',
-            'business_registration_number' => 'nullable|string|max:191',
-
-            /*
-            |--------------------------------------------------------------------------
-            | Contact Info (Common)
-            |--------------------------------------------------------------------------
-            */
-            'contact_person_name' => 'nullable|string|max:191',
-            'designation' => 'nullable|in:owner,ceo,manager,director,accountant,admin,purchasing_manager,other',
-
-            'email' => [
+            'business_type' => [
                 'nullable',
-                'email',
-                'max:191',
-                Rule::unique('clients')
-                    ->where(fn($q)=>$q->where('vendor_id',$vendorId)
-                        ->where('id','!=',$clientId)
-                        ->whereNull('deleted_at'))
+                'exclude_unless:client_type,commercial',
+                'in:sole_proprietorship,partnership,corporation,non_profit,government,other'
             ],
 
-            'mobile_number' => 'nullable|string|max:20',
-            'alternate_mobile_number' => 'nullable|string|max:20',
+            'industry' => [
+                'nullable',
+                'exclude_unless:client_type,commercial',
+                'in:technology,retail,healthcare,finance,manufacturing,construction,education,hospitality,transportation,other'
+            ],
+
+            'business_registration_number' => 'nullable|string|max:191|exclude_unless:client_type,commercial',
+            'contact_person_name' => 'nullable|string|max:191|exclude_unless:client_type,commercial',
+            'designation' => [
+                'nullable',
+                'exclude_unless:client_type,commercial',
+                'in:owner,ceo,manager,director,accountant,admin,employee,other'
+            ],
 
             /*
             |--------------------------------------------------------------------------
-            | Address (Commercial Only)
+            | Payment Object (Commercial Only)
             |--------------------------------------------------------------------------
             */
-            'address_line_1' => 'nullable|string|max:191|exclude_unless:client_type,commercial',
-            'address_line_2' => 'nullable|string|max:191|exclude_unless:client_type,commercial',
-            'city'           => 'nullable|string|max:191|exclude_unless:client_type,commercial',
-            'state'          => 'nullable|string|max:191|exclude_unless:client_type,commercial',
-            'country'        => 'nullable|string|max:191|exclude_unless:client_type,commercial',
-            'zip_code'       => 'nullable|string|max:20|exclude_unless:client_type,commercial',
+            'payment' => 'nullable|array|exclude_unless:client_type,commercial',
+            'payment.billing_name' => 'nullable|string|max:191',
+            'payment.payment_term' => [
+                'nullable',
+                'exclude_unless:client_type,commercial',
+                'in:due_on_receipt,net_7,net_15,net_30,net_45,net_60'
+            ],
+            'payment.preferred_currency' => [
+                'nullable',
+                'string',
+                'size:3',
+                'exclude_unless:client_type,commercial',
+                'in:inr,usd,eur,gbp,aed,sgd,cad,aud'
+            ],
 
             /*
             |--------------------------------------------------------------------------
-            | Billing / Finance
+            | Tax Object
             |--------------------------------------------------------------------------
             */
-            'billing_name' => 'nullable|string|max:191',
-            'payment_term' => 'nullable|in:net_7,net_15,net_30,net_45,net_60,due_on_receipt',
-            'preferred_currency' => 'nullable|string|max:5',
-            'tax_percentage' => 'nullable|numeric|between:0,100',
+            'tax' => 'nullable|array',
+            'tax.tax_percentage' => 'nullable|numeric|between:0,100',
 
             /*
             |--------------------------------------------------------------------------
@@ -136,12 +175,11 @@ class UpdateClientRequest extends FormRequest
             | Logo Upload
             |--------------------------------------------------------------------------
             */
-            ...FileValidationRules::tempId(
-                'logo_temp_id',
-                FileValidationRules::getAllowedMimeTypes('images'),
-                FileValidationRules::getSizeLimits('images')
-            ),
-
+            'logo_temp_id' => [
+                'nullable',
+                'string',
+                'regex:/^tmp_[a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12}$/'
+            ],
             'remove_logo' => 'nullable|boolean',
 
             /*
@@ -150,42 +188,73 @@ class UpdateClientRequest extends FormRequest
             |--------------------------------------------------------------------------
             */
             'status' => 'nullable|in:active,inactive,suspended,archived',
-            'is_verified' => 'nullable|boolean',
 
             /*
             |--------------------------------------------------------------------------
             | Availability Schedule
             |--------------------------------------------------------------------------
             */
-            'availability_schedule' => 'sometimes|array',
-            'availability_schedule.available_days' => 'sometimes|array|min:1',
+            'availability_schedule' => 'nullable|array',
+            'availability_schedule.available_days' => 'nullable|array|min:1',
             'availability_schedule.available_days.*' => 'string|in:' . implode(',', $days),
-            'availability_schedule.preferred_start_time' => 'sometimes|date_format:H:i',
-            'availability_schedule.preferred_end_time' => 'sometimes|date_format:H:i|after:availability_schedule.preferred_start_time',
-            'availability_schedule.has_lunch_break' => 'sometimes|boolean',
-            'availability_schedule.lunch_start' => 'nullable|date_format:H:i',
-            'availability_schedule.lunch_end' => 'nullable|date_format:H:i|after:availability_schedule.lunch_start',
+            'availability_schedule.preferred_start_time' => 'nullable|date_format:H:i',
+            'availability_schedule.preferred_end_time' => [
+                'nullable',
+                'date_format:H:i',
+                'after:availability_schedule.preferred_start_time'
+            ],
+            'availability_schedule.has_lunch_break' => 'nullable|boolean',
+            'availability_schedule.lunch_start' => [
+                'nullable',
+                'date_format:H:i',
+                'required_if:availability_schedule.has_lunch_break,true'
+            ],
+            'availability_schedule.lunch_end' => [
+                'nullable',
+                'date_format:H:i',
+                'required_if:availability_schedule.has_lunch_break,true',
+                'after:availability_schedule.lunch_start'
+            ],
             'availability_schedule.notes' => 'nullable|string|max:1000',
         ];
+
+        return $rules;
     }
 
     protected function prepareForValidation(): void
     {
         $rawLogoId = $this->input('logo_temp_id') ?: $this->input('logoTempId');
 
-        $this->merge([
+        // Prepare base data
+        $data = [
             'logo_temp_id' => $rawLogoId ?: null,
-            'tax_percentage' => $this->tax_percentage ? (float)$this->tax_percentage : null,
             'website_url' => $this->prepareWebsiteUrl($this->website_url),
-        ]);
+        ];
 
-        if ($this->has('availability_schedule')) {
-            $this->merge([
-                'availability_schedule' => is_array($this->availability_schedule)
-                    ? $this->availability_schedule
-                    : json_decode($this->availability_schedule, true),
-            ]);
+        // Handle tax percentage from tax object
+        if ($this->has('tax') && isset($this->tax['tax_percentage'])) {
+            $data['tax_percentage'] = (float)$this->tax['tax_percentage'];
         }
+
+        // Handle payment currency case
+        if ($this->has('payment') && isset($this->payment['preferred_currency'])) {
+            $data['preferred_currency'] = strtolower($this->payment['preferred_currency']);
+        }
+
+        // Handle availability schedule
+        if ($this->has('availability_schedule')) {
+            $schedule = is_array($this->availability_schedule)
+                ? $this->availability_schedule
+                : json_decode($this->availability_schedule, true);
+
+            if (isset($schedule['has_lunch_break'])) {
+                $schedule['has_lunch_break'] = filter_var($schedule['has_lunch_break'], FILTER_VALIDATE_BOOLEAN);
+            }
+
+            $data['availability_schedule'] = $schedule;
+        }
+
+        $this->merge($data);
     }
 
     private function prepareWebsiteUrl(?string $url): ?string
@@ -194,7 +263,7 @@ class UpdateClientRequest extends FormRequest
             return null;
         }
 
-        if (!str_starts_with($url,'http://') && !str_starts_with($url,'https://')) {
+        if (!str_starts_with($url, 'http://') && !str_starts_with($url, 'https://')) {
             return 'https://' . $url;
         }
 
@@ -206,8 +275,10 @@ class UpdateClientRequest extends FormRequest
         return [
             'business_name.unique' => 'Business name already exists.',
             'email.unique' => 'Email already exists.',
-            'tax_percentage.between' => 'Tax must be between 0-100.',
-            'logo_temp_id.*' => 'Invalid logo upload ID.',
+            'tax.tax_percentage.between' => 'Tax must be between 0-100.',
+            'logo_temp_id.regex' => 'Invalid logo upload ID.',
+            'availability_schedule.preferred_end_time.after' => 'End time must be after start time.',
+            'availability_schedule.lunch_end.after' => 'Lunch end time must be after lunch start time.',
         ];
     }
 

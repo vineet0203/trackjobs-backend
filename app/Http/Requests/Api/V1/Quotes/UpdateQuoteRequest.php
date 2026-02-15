@@ -22,13 +22,15 @@ class UpdateQuoteRequest extends FormRequest
             'client_id' => 'sometimes|exists:clients,id',
             'client_name' => 'sometimes|string|max:191',
             'client_email' => 'sometimes|email|max:191',
+            'status' => 'sometimes|in:draft,sent,pending,accepted,rejected,expired',
             'equity_status' => 'sometimes|in:pending,approved,rejected,not_applicable',
-            'currency' => 'sometimes|string|size:3',
+            'currency' => 'sometimes|string|size:3|in:USD,EUR,GBP,JPY,CAD,AUD',
 
+            // Section 2: Line Items
             'line_items' => 'sometimes|array',
             'line_items.*.id' => 'nullable|exists:quote_items,id',
             'line_items.*.item_name' => 'required_with:line_items|string|max:255',
-            'line_items.*.description' => 'nullable|string',
+            'line_items.*.description' => 'nullable|string|max:255',
             'line_items.*.quantity' => 'required_with:line_items|integer|min:1',
             'line_items.*.unit_price' => 'required_with:line_items|numeric|min:0',
             'line_items.*.tax_rate' => 'nullable|numeric|between:0,100',
@@ -59,9 +61,6 @@ class UpdateQuoteRequest extends FormRequest
             'can_convert_to_job' => 'sometimes|boolean',
             'job_id' => 'nullable|exists:jobs,id',
 
-            // Status Updates
-            'status' => 'sometimes|in:draft,sent,viewed,expired',
-
             // Meta
             'notes' => 'nullable|string',
             'expires_at' => 'nullable|date|after:today',
@@ -71,14 +70,34 @@ class UpdateQuoteRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'title.max' => 'Title must be at most 255 characters.',
+            'client_id.exists' => 'Selected client does not exist.',
             'client_email.email' => 'Please enter a valid email address.',
-            'items.*.item_name.required_with' => 'Item name is required for all items.',
-            'items.*.quantity.required_with' => 'Item quantity is required.',
-            'items.*.quantity.min' => 'Quantity must be at least 1.',
-            'items.*.unit_price.required_with' => 'Unit price is required.',
-            'items.*.unit_price.min' => 'Unit price cannot be negative.',
+            'status.in' => 'Invalid quote status selected.',
+            'equity_status.in' => 'Invalid equity status selected.',
+            'currency.size' => 'Currency must be 3 characters.',
+            'currency.in' => 'Invalid currency selected.',
+            'line_items.*.item_name.required_with' => 'Item name is required for all items.',
+            'line_items.*.item_name.max' => 'Item name must be at most 255 characters.',
+            'line_items.*.description.max' => 'Description must be at most 255 characters.',
+            'line_items.*.quantity.required_with' => 'Quantity is required for all items.',
+            'line_items.*.quantity.min' => 'Quantity must be at least 1.',
+            'line_items.*.quantity.integer' => 'Quantity must be a whole number.',
+            'line_items.*.unit_price.required_with' => 'Unit price is required for all items.',
+            'line_items.*.unit_price.min' => 'Unit price cannot be negative.',
+            'line_items.*.unit_price.numeric' => 'Unit price must be a number.',
+            'line_items.*.tax_rate.between' => 'Tax rate must be between 0 and 100.',
+            'discount.min' => 'Discount cannot be negative.',
             'deposit_type.required_if' => 'Deposit type is required when deposit is required.',
+            'deposit_type.in' => 'Deposit type must be percentage or fixed.',
             'deposit_amount.required_if' => 'Deposit amount is required when deposit is required.',
+            'deposit_amount.min' => 'Deposit amount cannot be negative.',
+            'approval_status.in' => 'Invalid approval status selected.',
+            'reminders.*.follow_up_schedule.required_with' => 'Follow up schedule is required.',
+            'reminders.*.reminder_type.required_with' => 'Reminder type is required.',
+            'reminders.*.reminder_type.in' => 'Invalid reminder type selected.',
+            'reminders.*.reminder_status.in' => 'Invalid reminder status selected.',
+            'expires_at.after' => 'Expiry date must be in the future.',
         ];
     }
 
@@ -89,6 +108,11 @@ class UpdateQuoteRequest extends FormRequest
             'deposit_required' => !is_null($this->deposit_required) ? filter_var($this->deposit_required, FILTER_VALIDATE_BOOLEAN) : null,
             'can_convert_to_job' => !is_null($this->can_convert_to_job) ? filter_var($this->can_convert_to_job, FILTER_VALIDATE_BOOLEAN) : null,
         ];
+
+        // Ensure currency is uppercase
+        if ($this->has('currency')) {
+            $data['currency'] = strtoupper($this->currency);
+        }
 
         // Map line_items to items if present
         if ($this->has('line_items')) {

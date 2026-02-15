@@ -35,7 +35,7 @@ class CreateClientRequest extends FormRequest
             */
             'first_name' => 'nullable|string|max:191|exclude_unless:client_type,residential',
             'last_name'  => 'nullable|string|max:191|exclude_unless:client_type,residential',
-            'address'    => 'nullable|string|exclude_unless:client_type,residential',
+            'residential_address'    => 'nullable|string|exclude_unless:client_type,residential',
 
             /*
             |--------------------------------------------------------------------------

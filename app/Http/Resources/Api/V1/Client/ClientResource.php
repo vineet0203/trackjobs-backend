@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources\Api\V1\Client;
 
-
 use App\Services\File\SignedUrlService;
 use App\Traits\HasSignedUrl;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -10,13 +9,19 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class ClientResource extends JsonResource
 {
     use HasSignedUrl;
+
     public function toArray($request)
     {
+        // Get the active schedule using the relationship
+        $activeSchedule = $this->getActiveSchedule();
 
         return [
             'id' => $this->id,
             'vendor_id' => $this->vendor_id,
-            //'user_id' => $this->user_id,
+            // Support both commercial + residential clients
+            'client_type' => $this->client_type ?? 'commercial',
+            'first_name' => $this->first_name ?? null,
+            'last_name' => $this->last_name ?? null,
             'business_name' => $this->business_name,
             'business_type' => $this->business_type,
             'industry' => $this->industry,
@@ -34,36 +39,47 @@ class ClientResource extends JsonResource
                 'country' => $this->country,
                 'zip_code' => $this->zip_code,
             ],
-            'billing' => [
-                'billing_name' => $this->billing_name,
-                'same_as_business_address' => (bool)$this->same_as_business_address,
-                'address_line_1' => $this->billing_address_line_1,
-                'address_line_2' => $this->billing_address_line_2,
-                'city' => $this->billing_city,
-                'state' => $this->billing_state,
-                'country' => $this->billing_country,
-                'zip_code' => $this->billing_zip_code,
-            ],
             'payment' => [
                 'payment_term' => $this->payment_term,
-                //'custom_payment_term' => $this->custom_payment_term,
                 'preferred_currency' => $this->preferred_currency,
+                'billing_name' => $this->billing_name,
             ],
             'tax' => [
                 'tax_percentage' => $this->tax_percentage,
-                'tax_id' => $this->tax_id,
             ],
             'website_url' => $this->website_url,
             'logo' => $this->getSignedUrlData($this->logo_path),
             'client_category' => $this->client_category,
             'notes' => $this->notes,
-            'status' => $this->status,
-            //'is_verified' => (bool)$this->is_verified,
-            //'verified_at' => $this->verified_at,
+            //'status' => $this->status,
             'created_by' => $this->created_by,
             'updated_by' => $this->updated_by,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
+
+            // Availability scheduling
+            'availability_schedule' => $activeSchedule ? new ClientAvailabilityResource($activeSchedule) : null,
         ];
+    }
+
+    /**
+     * Helper method to get active schedule
+     */
+    private function getActiveSchedule()
+    {
+        // First try to use the relationship if it's loaded
+        if ($this->relationLoaded('availabilitySchedules')) {
+            return $this->availabilitySchedules
+                ->where('is_active', true)
+                ->where(function ($schedule) {
+                    return !$schedule->schedule_end_date ||
+                        $schedule->schedule_end_date >= now()->toDateString();
+                })
+                ->sortByDesc('created_at')
+                ->first();
+        }
+
+        // If relationship is not loaded, use the activeAvailabilitySchedule relationship
+        return $this->activeAvailabilitySchedule;
     }
 }

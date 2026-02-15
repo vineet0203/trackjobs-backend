@@ -16,40 +16,40 @@ class QuoteQueryService
     public function getQuotes(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $query = Quote::query();
-        
+
         // Apply filters
         $query = $this->applyFilters($query, $filters);
-        
+
         // Apply search
         if (!empty($filters['search'])) {
             $query = $this->applySearch($query, $filters['search']);
         }
-        
+
         // Apply sorting
         $sortBy = $filters['sort_by'] ?? 'created_at';
         $sortOrder = $filters['sort_order'] ?? 'desc';
         $query = $this->applySorting($query, $sortBy, $sortOrder);
-        
+
         // Eager load relationships
-        $query->with(['items', 'creator']);
-        
+        $query->with(['items', 'creator', 'updater', 'reminders']);
+
         Log::debug('Executing quote query', [
             'filters' => $filters,
             'per_page' => $perPage,
         ]);
-        
+
         return $query->paginate($perPage);
     }
-    
+
     /**
      * Get a specific quote
      */
     public function getQuote(int $quoteId): ?Quote
     {
-        return Quote::with(['items', 'creator', 'updater'])
+        return Quote::with(['items', 'creator', 'updater', 'reminders'])
             ->find($quoteId);
     }
-    
+
     /**
      * Get quote by quote number
      */
@@ -59,7 +59,7 @@ class QuoteQueryService
             ->with(['items', 'creator'])
             ->first();
     }
-    
+
     /**
      * Get quotes by client email
      */
@@ -70,7 +70,7 @@ class QuoteQueryService
             ->orderBy('created_at', 'desc')
             ->get();
     }
-    
+
     /**
      * Get quotes by status
      */
@@ -81,7 +81,7 @@ class QuoteQueryService
             ->orderBy('created_at', 'desc')
             ->get();
     }
-    
+
     /**
      * Get quotes needing follow-up
      */
@@ -92,7 +92,7 @@ class QuoteQueryService
             ->with(['items'])
             ->get();
     }
-    
+
     /**
      * Get quote statistics
      */
@@ -115,7 +115,7 @@ class QuoteQueryService
                 ->toArray(),
         ];
     }
-    
+
     /**
      * Apply filters to the query
      */
@@ -125,17 +125,17 @@ class QuoteQueryService
         if (!empty($filters['status']) && $filters['status'] !== 'all') {
             $query->where('status', $filters['status']);
         }
-        
+
         // Filter by client email
         if (!empty($filters['client_email'])) {
             $query->where('client_email', $filters['client_email']);
         }
-        
+
         // Filter by client name
         if (!empty($filters['client_name'])) {
             $query->where('client_name', 'like', '%' . $filters['client_name'] . '%');
         }
-        
+
         // Filter by date range
         if (!empty($filters['date_from'])) {
             $query->whereDate('created_at', '>=', $filters['date_from']);
@@ -143,15 +143,15 @@ class QuoteQueryService
         if (!empty($filters['date_to'])) {
             $query->whereDate('created_at', '<=', $filters['date_to']);
         }
-        
+
         // Filter by follow-up status
         if (!empty($filters['follow_up_status'])) {
             $query->where('follow_up_status', $filters['follow_up_status']);
         }
-        
+
         return $query;
     }
-    
+
     /**
      * Apply search to the query
      */
@@ -159,29 +159,35 @@ class QuoteQueryService
     {
         return $query->where(function ($q) use ($searchTerm) {
             $q->where('quote_number', 'like', '%' . $searchTerm . '%')
-              ->orWhere('title', 'like', '%' . $searchTerm . '%')
-              ->orWhere('client_name', 'like', '%' . $searchTerm . '%')
-              ->orWhere('client_email', 'like', '%' . $searchTerm . '%');
+                ->orWhere('title', 'like', '%' . $searchTerm . '%')
+                ->orWhere('client_name', 'like', '%' . $searchTerm . '%')
+                ->orWhere('client_email', 'like', '%' . $searchTerm . '%');
         });
     }
-    
+
     /**
      * Apply sorting to the query
      */
     private function applySorting(Builder $query, string $sortBy, string $sortOrder): Builder
     {
         $allowedSortFields = [
-            'id', 'quote_number', 'title', 'client_name', 
-            'total_amount', 'created_at', 'updated_at', 'expires_at'
+            'id',
+            'quote_number',
+            'title',
+            'client_name',
+            'total_amount',
+            'created_at',
+            'updated_at',
+            'expires_at'
         ];
-        
+
         if (in_array($sortBy, $allowedSortFields)) {
             $query->orderBy($sortBy, $sortOrder === 'asc' ? 'asc' : 'desc');
         }
-        
+
         return $query;
     }
-    
+
     /**
      * Get applied filters for meta data
      */
@@ -189,20 +195,24 @@ class QuoteQueryService
     {
         $appliedFilters = [];
         $filterableFields = [
-            'status', 'client_email', 'client_name', 
-            'date_from', 'date_to', 'follow_up_status'
+            'status',
+            'client_email',
+            'client_name',
+            'date_from',
+            'date_to',
+            'follow_up_status'
         ];
-        
+
         foreach ($filterableFields as $field) {
             if (!empty($filters[$field])) {
                 $appliedFilters[$field] = $filters[$field];
             }
         }
-        
+
         if (!empty($filters['search'])) {
             $appliedFilters['search'] = $filters['search'];
         }
-        
+
         return $appliedFilters;
     }
 }

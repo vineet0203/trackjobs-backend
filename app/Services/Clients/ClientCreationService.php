@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\Log;
 class ClientCreationService
 {
     public function __construct(
-        private FileAttachmentService $fileAttachmentService
+        private FileAttachmentService $fileAttachmentService,
+        private ClientAvailabilityService $availabilityService
     ) {}
 
     /**
@@ -30,10 +31,9 @@ class ClientCreationService
                 'created_by' => $createdBy
             ]);
 
-            // Handle billing address logic
-            if ($data['same_as_business_address'] ?? false) {
-                $data = $this->copyBusinessAddressToBilling($data);
-            }
+            // Extract availability data if present
+            $availabilityData = $data['availability_schedule'] ?? null;
+            unset($data['availability_schedule']);
 
             // Handle logo upload if present
             if (isset($data['logo_temp_id'])) {
@@ -44,7 +44,12 @@ class ClientCreationService
                     destinationPath: 'clients/logos', // 'private/clients/logos'
                     allowedMimeTypes: FileValidationRules::getAllowedMimeTypes('images'),
                     maxSizeKb: FileValidationRules::getSizeLimits('images'),
-                    customFilename: $this->generateLogoFilename($data['business_name']),
+                    customFilename: $this->generateLogoFilename(
+                        $data['business_name']
+                            ?? trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''))
+                            ?? 'client'
+                    ),
+
                     keepOriginalName: false
                 );
 
@@ -52,7 +57,7 @@ class ClientCreationService
                     throw new \Exception(implode(', ', $errors['logo_temp_id'] ?? []));
                 }
             }
-            
+
             Log::info('Creating client with data', [
                 'data_keys' => array_keys($data),
                 'has_logo_path' => isset($data['logo_path']),
@@ -60,6 +65,14 @@ class ClientCreationService
             ]);
 
             $client = Client::create($data);
+
+            // Create availability schedule if data provided
+            if (!empty($availabilityData)) {
+                $this->availabilityService->createSchedule($client, $availabilityData, $createdBy);
+                Log::info('Availability schedule created for client', [
+                    'client_id' => $client->id
+                ]);
+            }
 
             DB::commit();
 
@@ -70,9 +83,10 @@ class ClientCreationService
                 'has_logo' => !empty($client->logo_path),
                 'logo_path' => $client->logo_path,
                 'created_by' => $createdBy,
+                'has_schedule' => !empty($availabilityData)
             ]);
 
-            return $client;
+            return $client->load('availabilitySchedules');
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -105,30 +119,6 @@ class ClientCreationService
         return "logo_{$slug}_{$random}_{$timestamp}.png";
     }
 
-    /**
-     * Copy business address to billing address fields
-     */
-    private function copyBusinessAddressToBilling(array $data): array
-    {
-        $data['billing_address_line_1'] = $data['address_line_1'];
-        $data['billing_address_line_2'] = $data['address_line_2'];
-        $data['billing_city'] = $data['city'];
-        $data['billing_state'] = $data['state'];
-        $data['billing_country'] = $data['country'];
-        $data['billing_zip_code'] = $data['zip_code'];
-
-        return $data;
-    }
-
-    /**
-     * Validate if client with same business name exists for vendor
-     */
-    public function validateBusinessNameExists(int $vendorId, string $businessName): bool
-    {
-        return Client::where('vendor_id', $vendorId)
-            ->where('business_name', $businessName)
-            ->exists();
-    }
 
     /**
      * Validate if client with same email exists for vendor

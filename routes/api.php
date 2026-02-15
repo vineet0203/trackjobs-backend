@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Client\ClientController;
+use App\Http\Controllers\Api\V1\Client\ClientAvailabilityController; // NEW: Add this line
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\DeploymentController;
 use App\Http\Controllers\Api\V1\Quotes\QuoteController;
@@ -10,7 +11,9 @@ use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 
-// Request Analytics routes for debugging and analysis
+// ============================================
+// REQUEST ANALYTICS ROUTES (DEBUG/ANALYSIS)
+// ============================================
 Route::middleware(['api'])->group(function () {
     // Get current request analytics
     Route::get('/analytics/request', function (Request $request) {
@@ -22,7 +25,6 @@ Route::middleware(['api'])->group(function () {
             'timestamp' => now()->toISOString(),
         ]);
     });
-
 
     // Get analytics for specific IP
     Route::get('/analytics/ip/{ip}', function (string $ip) {
@@ -40,32 +42,37 @@ Route::middleware(['api'])->group(function () {
     });
 });
 
+// ============================================
+// <<==================== ACTUAL API ENDPOINTS ===================>>
+// ============================================
 
-
-// <<==================== Actual Api Endpoints ===================>>
-
-// Public authentication routes
+// ============================================
+// PUBLIC AUTHENTICATION ROUTES
+// ============================================
 Route::prefix('auth')->group(function () {
     Route::post('register', [AuthController::class, 'register'])->name('auth.register');
     Route::post('login', [AuthController::class, 'login'])->name('auth.login');
     Route::post('refresh', [AuthController::class, 'refresh'])->name('auth.refresh');
+
     // Password reset flow
     Route::post('password/forgot', [AuthController::class, 'forgotPassword'])->name('auth.forgot-password');
     Route::post('password/reset', [AuthController::class, 'resetPassword'])->name('auth.reset-password');
     Route::post('password/verify-token', [AuthController::class, 'verifyResetToken'])->name('auth.verify-email');
 });
 
-
-// Protected routes - Require authentication
+// ============================================
+// PROTECTED ROUTES - REQUIRE AUTHENTICATION
+// ============================================
 Route::middleware(['jwt.verify'])->group(function () {
 
-    // <<==================== AUTH & PROFILE ROUTES ===================>>
+    // ============================================
+    // AUTH & PROFILE ROUTES
+    // ============================================
     Route::prefix('auth')->group(function () {
         Route::post('logout', [AuthController::class, 'logout'])->name('auth.logout');
         Route::get('me', [AuthController::class, 'me'])->name('auth.me');
-        // Route::put('profile', [AuthController::class, 'updateProfile'])->name('auth.update-profile');
 
-        // Update password - ALL authenticated users can do this
+        // Password management
         Route::put('password', [AuthController::class, 'updatePassword'])->name('auth.update-password');
         Route::put('password/force-change', [AuthController::class, 'forceChangePassword'])->name('auth.force-change-password');
 
@@ -74,47 +81,92 @@ Route::middleware(['jwt.verify'])->group(function () {
         Route::get('security/logs', [AuthController::class, 'getSecurityLogs'])->name('auth.security-logs');
     });
 
-
+    // ============================================
+    // VENDOR MANAGEMENT ROUTES
+    // ============================================
     Route::prefix('vendors')->group(function () {
-        // Get all clients for a vendor with filters
-        Route::get('{vendorId}/clients', [ClientController::class, 'getVendorClients']);
-        // Get a specific client for a vendor
-        Route::get('{vendorId}/clients/{clientId}', [ClientController::class, 'getVendorClient']);
-        // Add a new client for a vendor
-        Route::post('{vendorId}/clients', [ClientController::class, 'addClient']);
-        // Update a client for a vendor
-        Route::put('{vendorId}/clients/{clientId}', [ClientController::class, 'modifyClient']);
-        // Delete a client for a vendor
-        Route::delete('{vendorId}/clients/{clientId}', [ClientController::class, 'removeClient']);
+        // ============================================
+        // CLIENT MANAGEMENT ROUTES
+        // ============================================
+        Route::prefix('{vendorId}/clients')->group(function () {
+            // Get all clients for a vendor with filters
+            Route::get('/', [ClientController::class, 'getVendorClients']);
+            // Get a specific client for a vendor
+            Route::get('/{clientId}', [ClientController::class, 'getVendorClient']);
+            // Add a new client for a vendor
+            Route::post('/', [ClientController::class, 'addClient']);
+            // Update a client for a vendor
+            Route::put('/{clientId}', [ClientController::class, 'modifyClient']);
+            // Delete a client for a vendor
+            Route::delete('/{clientId}', [ClientController::class, 'removeClient']);
+
+            // ============================================
+            // CLIENT AVAILABILITY SCHEDULING ROUTES
+            // ============================================
+            Route::prefix('{clientId}/availability')->group(function () {
+                // Get all availability schedules for client
+                Route::get('/', [ClientAvailabilityController::class, 'index']);
+                // Get active availability schedule
+                Route::get('/active', [ClientAvailabilityController::class, 'getActive']);
+                // Create new availability schedule
+                Route::post('/', [ClientAvailabilityController::class, 'store']);
+                // Check client availability for specific date/time
+                Route::get('/check', [ClientAvailabilityController::class, 'checkAvailability']);
+                // Get available time slots for specific date
+                Route::get('/slots', [ClientAvailabilityController::class, 'getAvailableSlots']);
+            });
+        });
+
+        // ============================================
+        // QUOTE MANAGEMENT ROUTES
+        // ============================================
+        Route::prefix('quotes')->group(function () {
+            Route::get('/', [QuoteController::class, 'index']);
+            Route::get('/statistics', [QuoteController::class, 'statistics']);
+            Route::get('/number/{quoteNumber}', [QuoteController::class, 'showByNumber']);
+            Route::post('/', [QuoteController::class, 'store']);
+            Route::get('/{id}', [QuoteController::class, 'show']);
+            Route::put('/{id}', [QuoteController::class, 'update']);
+            Route::delete('/{id}', [QuoteController::class, 'destroy']);
+            Route::post('/{id}/send', [QuoteController::class, 'send']);
+            Route::post('/{id}/follow-up-status', [QuoteController::class, 'updateFollowUpStatus']);
+        });
+
+        // ============================================
+        // DIRECT AVAILABILITY SCHEDULE MANAGEMENT
+        // (For updating/deleting specific schedules)
+        // ============================================
+        Route::prefix('{vendorId}/availability-schedules')->group(function () {
+            // Update specific availability schedule
+            Route::put('/{scheduleId}', [ClientAvailabilityController::class, 'update']);
+            // Delete specific availability schedule
+            Route::delete('/{scheduleId}', [ClientAvailabilityController::class, 'destroy']);
+        });
     });
 
-    Route::prefix('quotes')->group(function () {
-        Route::get('/', [QuoteController::class, 'index']);
-        Route::get('/statistics', [QuoteController::class, 'statistics']);
-        Route::get('/number/{quoteNumber}', [QuoteController::class, 'showByNumber']);
-        Route::post('/', [QuoteController::class, 'store']);
-        Route::get('/{id}', [QuoteController::class, 'show']);
-        Route::put('/{id}', [QuoteController::class, 'update']);
-        Route::delete('/{id}', [QuoteController::class, 'destroy']);
-        Route::post('/{id}/send', [QuoteController::class, 'send']);
-        Route::post('/{id}/follow-up-status', [QuoteController::class, 'updateFollowUpStatus']);
-    });
 
-    // Upload routes
+
+    // ============================================
+    // UPLOAD MANAGEMENT ROUTES
+    // ============================================
     Route::prefix('uploads')->group(function () {
         Route::post('/temp', [UploadController::class, 'uploadTemporary']);
         Route::get('/limits', [UploadController::class, 'getUploadLimits']);
     });
 });
 
-// Signed URL routes
+// ============================================
+// SIGNED URL ROUTES
+// ============================================
 Route::prefix('files')->group(function () {
     // Serve signed files (no auth required - URL itself is the auth)
     Route::get('/signed/{signature}', [SignedFileController::class, 'serveSigned'])
         ->name('api.v1.files.signed');
 });
 
-// Deployment webhooks and manual deploy routes
+// ============================================
+// DEPLOYMENT WEBHOOKS AND MANUAL DEPLOY ROUTES
+// ============================================
 Route::prefix('webhooks')->group(function () {
     Route::get('/github', [DeploymentController::class, 'verifyWebhook']);
 
@@ -124,12 +176,14 @@ Route::prefix('webhooks')->group(function () {
     Route::post('/manual-deploy', [DeploymentController::class, 'manualDeploy'])
         ->middleware('throttle:5,1');
 
-    // rollback endpoint
+    // Rollback endpoint
     Route::post('/rollback', [DeploymentController::class, 'rollback'])
         ->middleware('throttle:2,10');
 });
 
-// Fallback for undefined routes
+// ============================================
+// FALLBACK FOR UNDEFINED ROUTES
+// ============================================
 Route::fallback(function () {
     return response()->json([
         'status' => 'error',

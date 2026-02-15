@@ -43,23 +43,30 @@ class QuoteController extends BaseController
     public function store(CreateQuoteRequest $request): JsonResponse
     {
         try {
+            $validatedData = $request->validated();
+
+            // Fetch client email for duplicate check
+            $client = \App\Models\Client::find($validatedData['client_id']);
+
             Log::info('=== CREATE QUOTE START ===', [
-                'client_email' => $request->client_email,
-                'title' => $request->title,
+                'client_id' => $validatedData['client_id'],
+                'client_email' => $client->email ?? 'not found',
+                'title' => $validatedData['title'],
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent()
             ]);
 
-            // Check for duplicate quote
+            // Check for duplicate quote using client email from database
             $isDuplicate = $this->quoteCreationService->validateDuplicateQuote(
-                $request->client_email,
-                $request->title
+                $client->email,
+                $validatedData['title']
             );
 
             if ($isDuplicate) {
                 Log::warning('Duplicate quote detected', [
-                    'client_email' => $request->client_email,
-                    'title' => $request->title,
+                    'client_id' => $validatedData['client_id'],
+                    'client_email' => $client->email,
+                    'title' => $validatedData['title'],
                 ]);
 
                 return $this->errorResponse(
@@ -68,7 +75,6 @@ class QuoteController extends BaseController
                 );
             }
 
-            $validatedData = $request->validated();
             $quote = $this->quoteCreationService->create($validatedData, auth()->id());
 
             Log::info('=== CREATE QUOTE END ===', [
@@ -81,13 +87,12 @@ class QuoteController extends BaseController
                 new QuoteResource($quote),
                 'Quote created successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== CREATE QUOTE END ===', [
                 'status' => 'error',
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'client_email' => $request->client_email,
+                'client_id' => $request->client_id,
             ]);
 
             return $this->errorResponse(
@@ -134,7 +139,6 @@ class QuoteController extends BaseController
                     ]
                 ]
             );
-
         } catch (\Exception $e) {
             Log::error('=== GET QUOTES END ===', [
                 'status' => 'error',
@@ -178,7 +182,6 @@ class QuoteController extends BaseController
                 new QuoteResource($quote),
                 'Quote retrieved successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== GET QUOTE END ===', [
                 'quote_id' => $id,
@@ -219,7 +222,6 @@ class QuoteController extends BaseController
                 new QuoteResource($quote),
                 'Quote retrieved successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== GET QUOTE BY NUMBER END ===', [
                 'quote_number' => $quoteNumber,
@@ -266,7 +268,6 @@ class QuoteController extends BaseController
                 new QuoteResource($quote),
                 'Quote updated successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== UPDATE QUOTE END ===', [
                 'quote_id' => $id,
@@ -311,7 +312,6 @@ class QuoteController extends BaseController
                 new QuoteResource($quote),
                 'Quote sent successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== SEND QUOTE END ===', [
                 'quote_id' => $id,
@@ -345,7 +345,7 @@ class QuoteController extends BaseController
 
             // Check if quote can be deleted
             $canDelete = $this->quoteDeletionService->canDelete($quote);
-            
+
             if (!$canDelete['can_delete']) {
                 return $this->errorResponse(
                     $canDelete['message'],
@@ -364,7 +364,6 @@ class QuoteController extends BaseController
                 null,
                 'Quote deleted successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== DELETE QUOTE END ===', [
                 'quote_id' => $id,
@@ -397,7 +396,6 @@ class QuoteController extends BaseController
                 $statistics,
                 'Quote statistics retrieved successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== GET QUOTE STATISTICS END ===', [
                 'status' => 'error',
@@ -444,7 +442,6 @@ class QuoteController extends BaseController
                 new QuoteResource($quote),
                 'Follow-up status updated successfully.'
             );
-
         } catch (\Exception $e) {
             Log::error('=== UPDATE FOLLOW-UP STATUS END ===', [
                 'quote_id' => $id,

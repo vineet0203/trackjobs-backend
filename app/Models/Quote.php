@@ -13,24 +13,36 @@ class Quote extends BaseModel
     protected $fillable = [
         'quote_number',
         'title',
+        'client_id',
         'client_name',
         'client_email',
+        'equity_status',
+        'currency',
         'subtotal',
         'discount',
         'total_amount',
+        'deposit_required',
         'deposit_type',
         'deposit_amount',
-        'status',
+        'approval_status',
         'client_signature',
-        'approved_at',
+        'approval_date',
+        'approval_action_date',
+        'status',
         'sent_at',
+        'can_convert_to_job',
+        'is_converted',
+        'job_id',
+        'converted_at',
         'follow_up_at',
         'reminder_type',
         'follow_up_status',
         'expires_at',
         'notes',
+        'vendor_id',
         'created_by',
         'updated_by',
+        'converted_by',
     ];
 
     protected $casts = [
@@ -38,11 +50,37 @@ class Quote extends BaseModel
         'discount' => 'decimal:2',
         'total_amount' => 'decimal:2',
         'deposit_amount' => 'decimal:2',
+        'deposit_required' => 'boolean',
+        'can_convert_to_job' => 'boolean',
+        'is_converted' => 'boolean',
         'approved_at' => 'datetime',
+        'approval_date' => 'datetime',
+        'approval_action_date' => 'datetime',
         'sent_at' => 'datetime',
         'follow_up_at' => 'datetime',
         'expires_at' => 'datetime',
+        'converted_at' => 'datetime',
     ];
+
+
+    /**
+     * Relationship with vendor
+     */
+    public function vendor()
+    {
+        return $this->belongsTo(User::class, 'vendor_id');
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class, 'client_id');
+    }
+
+    public function reminders()
+    {
+        return $this->hasMany(QuoteReminder::class);
+    }
+
 
     /**
      * Relationship with quote items
@@ -66,6 +104,18 @@ class Quote extends BaseModel
     public function updater()
     {
         return $this->belongsTo(User::class, 'updated_by');
+    }
+
+    public function converter()
+    {
+        return $this->belongsTo(User::class, 'converted_by');
+    }
+
+    public function canBeConverted(): bool
+    {
+        return $this->can_convert_to_job &&
+            !$this->is_converted &&
+            $this->approval_status === 'accepted';
     }
 
     /**
@@ -111,15 +161,46 @@ class Quote extends BaseModel
     /**
      * Calculate totals from items
      */
-    public function calculateTotals(): void
-    {
-        $subtotal = $this->items()->sum('total');
-        
-        $this->update([
-            'subtotal' => $subtotal,
-            'total_amount' => $subtotal - $this->discount,
-        ]);
+/**
+ * Calculate totals from items
+ */
+public function calculateTotals(): self
+{
+    $subtotal = $this->items->sum(function ($item) {
+        return $item->quantity * $item->unit_price;
+    });
+
+    $total = $this->items->sum(function ($item) {
+        $subtotal = $item->quantity * $item->unit_price;
+        $tax = $subtotal * ($item->tax_rate / 100);
+        return $subtotal + $tax;
+    });
+
+    $totalAmount = $total - ($this->discount ?? 0);
+    
+    $updateData = [
+        'subtotal' => $subtotal,
+        'total_amount' => $totalAmount,
+    ];
+
+    // Handle deposit amount based on type
+    if ($this->deposit_required) {
+        if ($this->deposit_type === 'percentage') {
+            // If deposit_amount is stored as a percentage (e.g., 5 for 5%)
+            // Keep it as is - don't recalculate
+            // The frontend will calculate the actual amount for display
+        } else {
+            // For fixed amount, ensure it doesn't exceed total
+            if ($this->deposit_amount > $totalAmount) {
+                $updateData['deposit_amount'] = $totalAmount;
+            }
+        }
     }
+
+    $this->update($updateData);
+
+    return $this;
+}
 
     /**
      * Generate quote number

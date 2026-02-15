@@ -13,19 +13,20 @@ return new class extends Migration
             $table->foreignId('quote_id')->constrained()->onDelete('cascade');
             
             // Line Item Details
-            $table->string('name');
+            $table->string('item_name');
             $table->text('description')->nullable();
             $table->integer('quantity')->default(1);
             $table->decimal('unit_price', 12, 2)->default(0);
             $table->decimal('tax_rate', 5, 2)->default(0);
             $table->decimal('tax_amount', 12, 2)->default(0);
-            $table->decimal('total', 12, 2)->default(0);
+            $table->decimal('item_total', 12, 2)->default(0);
+            
+            
+            // Package reference (for selected packages)
+            $table->foreignId('package_id')->nullable()->constrained('packages')->onDelete('set null');
             
             // Ordering
             $table->integer('sort_order')->default(0);
-            
-            // Package reference (optional)
-            $table->foreignId('package_id')->nullable()->constrained()->onDelete('set null');
             
             $table->timestamps();
             

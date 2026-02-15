@@ -15,7 +15,8 @@ class ClientQueryService
      */
     public function getClients(int $vendorId, array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
-        $query = Client::where('vendor_id', $vendorId);
+        $query = Client::where('vendor_id', $vendorId)
+            ->with('availabilitySchedules');
 
         // Apply filters
         $query = $this->applyFilters($query, $filters);
@@ -46,7 +47,7 @@ class ClientQueryService
     {
         return Client::where('vendor_id', $vendorId)
             ->where('id', $clientId)
-            ->with(['vendor', 'user'])
+            ->with(['vendor', 'user', 'availabilitySchedules'])
             ->first();
     }
 
@@ -57,6 +58,7 @@ class ClientQueryService
     {
         return Client::where('vendor_id', $vendorId)
             ->where('email', $email)
+            ->with('availabilitySchedules')
             ->first();
     }
 
@@ -192,7 +194,6 @@ class ClientQueryService
                 ->orWhere('mobile_number', 'like', '%' . $searchTerm . '%')
                 ->orWhere('alternate_mobile_number', 'like', '%' . $searchTerm . '%')
                 ->orWhere('business_registration_number', 'like', '%' . $searchTerm . '%')
-                ->orWhere('tax_id', 'like', '%' . $searchTerm . '%')
                 ->orWhere('website_url', 'like', '%' . $searchTerm . '%');
         });
     }

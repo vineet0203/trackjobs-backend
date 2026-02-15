@@ -25,7 +25,7 @@ trait ApiResponse
             'message' => $message,
         ];
 
-        // If data is a ResourceCollection, handle pagination and formatting
+        // If data is a ResourceCollection, handle it
         if ($data instanceof ResourceCollection) {
             $response = $this->formatResourceCollectionResponse($data, $response, $extra);
         }
@@ -64,45 +64,34 @@ trait ApiResponse
      */
     private function formatResourceCollectionResponse(ResourceCollection $collection, array $response, array $extra = []): array
     {
-        // Get the underlying paginator
-        $paginator = $collection->resource;
+        // Get the collection's array representation
+        $collectionArray = $collection->toArray(request());
 
-        // If it's not a paginator, fall back to the old method
-        if (!$paginator instanceof \Illuminate\Pagination\AbstractPaginator) {
-            return $this->fallbackFormatResourceCollection($collection, $response, $extra);
-        }
+        // Merge the collection's structure directly into the response
+        $response = array_merge($response, $collectionArray);
 
-        // Get the transformed data from the collection
-        $response['data'] = $collection->resolve(request());
-
-        // Build fresh meta data from the paginator
-        $meta = [
-            'current_page' => $paginator->currentPage(),
-            'from' => $paginator->firstItem(),
-            'last_page' => $paginator->lastPage(),
-            'per_page' => $paginator->perPage(),
-            'to' => $paginator->lastItem(),
-            'total' => $paginator->total(),
-            'path' => $paginator->path(),
-        ];
-
-        // Merge custom extra data
+        // Add extra data if provided
         if (!empty($extra)) {
-            $meta = array_merge($meta, $extra);
+            // If the collection has a meta key, merge extra into it
+            if (isset($response['meta']) && is_array($response['meta'])) {
+                $response['meta'] = array_merge($response['meta'], $extra);
+            } else {
+                // Otherwise, add extra as a top-level key
+                foreach ($extra as $key => $value) {
+                    // Only add if key doesn't exist to prevent overwriting
+                    if (!isset($response[$key])) {
+                        $response[$key] = $value;
+                    } elseif ($key === 'meta' && isset($response['meta'])) {
+                        // If it's meta and exists, merge
+                        $response['meta'] = array_merge($response['meta'], (array)$value);
+                    }
+                }
+            }
         }
-
-        $response['meta'] = $meta;
-
-        // Build links
-        $response['links'] = [
-            'first' => $paginator->url(1),
-            'last' => $paginator->url($paginator->lastPage()),
-            'prev' => $paginator->previousPageUrl(),
-            'next' => $paginator->nextPageUrl(),
-        ];
 
         return $response;
     }
+
 
 
     /**

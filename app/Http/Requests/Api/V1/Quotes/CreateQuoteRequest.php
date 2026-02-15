@@ -15,30 +15,46 @@ class CreateQuoteRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // Quote Details
+            // Section 1: Quote Details
+            'quote_number' => 'sometimes|string|unique:quotes,quote_number',
             'title' => 'required|string|max:255',
-            'client_name' => 'required|string|max:191',
-            'client_email' => 'required|email|max:191',
+            'client_id' => 'required|exists:clients,id',
+            'equity_status' => 'sometimes|in:pending,approved,rejected,not_applicable',
+            'currency' => 'sometimes|string|size:3',
             
-            // Pricing
+            // Section 2: Line Items - CHANGE THIS FROM 'items' TO 'line_items'
+            'line_items' => 'required|array|min:1',
+            'line_items.*.item_name' => 'required|string|max:255',
+            'line_items.*.description' => 'nullable|string',
+            'line_items.*.quantity' => 'required|integer|min:1',
+            'line_items.*.unit_price' => 'required|numeric|min:0',
+            'line_items.*.tax_rate' => 'nullable|numeric|between:0,100',
+            'line_items.*.package_id' => 'nullable|exists:packages,id',
+            
+            // Section 3: Pricing Summary
             'discount' => 'nullable|numeric|min:0',
-            'deposit_type' => 'required|in:none,percentage,fixed,default',
-            'deposit_amount' => 'nullable|required_if:deposit_type,fixed|numeric|min:0',
-            'deposit_percentage' => 'nullable|required_if:deposit_type,percentage|numeric|between:1,100',
+            'deposit_required' => 'sometimes|boolean',
+            'deposit_type' => 'required_if:deposit_required,true|in:percentage,fixed',
+            'deposit_amount' => 'required_if:deposit_required,true|numeric|min:0',
             
-            // Follow-ups
-            'follow_up_at' => 'nullable|date',
-            'reminder_type' => 'nullable|in:none,email,sms',
+            // Section 4: Client Approval
+            'approval_status' => 'sometimes|in:pending,accepted,rejected',
+            'client_signature' => 'nullable|string',
+            'approval_date' => 'nullable|date',
+            'approval_action_date' => 'nullable|date',
+            
+            // Section 5: Follow Ups & Reminders
+            'reminders' => 'sometimes|array',
+            'reminders.*.follow_up_schedule' => 'required_with:reminders|date',
+            'reminders.*.reminder_type' => 'required_with:reminders|in:email,sms,notification',
+            'reminders.*.reminder_status' => 'sometimes|in:scheduled,sent,cancelled',
+            
+            // Section 6: Conversion to Job
+            'can_convert_to_job' => 'sometimes|boolean', // CHANGE THIS FROM 'convert_to_job'
+            
+            // Meta
             'notes' => 'nullable|string',
-            
-            // Line Items
-            'items' => 'required|array|min:1',
-            'items.*.name' => 'required|string|max:255',
-            'items.*.description' => 'nullable|string',
-            'items.*.quantity' => 'required|integer|min:1',
-            'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.tax_rate' => 'nullable|numeric|between:0,100',
-            'items.*.package_id' => 'nullable|exists:packages,id',
+            'expires_at' => 'nullable|date|after:today',
         ];
     }
 
@@ -46,25 +62,36 @@ class CreateQuoteRequest extends FormRequest
     {
         return [
             'title.required' => 'Quote title is required.',
-            'client_name.required' => 'Client name is required.',
-            'client_email.required' => 'Client email is required.',
-            'client_email.email' => 'Please enter a valid email address.',
-            'items.required' => 'At least one line item is required.',
-            'items.*.name.required' => 'Item name is required.',
-            'items.*.quantity.required' => 'Item quantity is required.',
-            'items.*.quantity.min' => 'Quantity must be at least 1.',
-            'items.*.unit_price.required' => 'Unit price is required.',
-            'items.*.unit_price.min' => 'Unit price cannot be negative.',
+            'client_id.required' => 'Client is required.',
+            'client_id.exists' => 'Selected client does not exist.',
+            'line_items.required' => 'At least one line item is required.', // UPDATED
+            'line_items.*.item_name.required' => 'Item name is required for all items.', // UPDATED
+            'line_items.*.quantity.required' => 'Item quantity is required.', // UPDATED
+            'line_items.*.quantity.min' => 'Quantity must be at least 1.', // UPDATED
+            'line_items.*.unit_price.required' => 'Unit price is required.', // UPDATED
+            'line_items.*.unit_price.min' => 'Unit price cannot be negative.', // UPDATED
+            'deposit_type.required_if' => 'Deposit type is required when deposit is required.',
+            'deposit_amount.required_if' => 'Deposit amount is required when deposit is required.',
         ];
     }
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
-            'deposit_amount' => $this->deposit_amount ? (float) $this->deposit_amount : null,
-            'deposit_percentage' => $this->deposit_percentage ? (float) $this->deposit_percentage : null,
-            'follow_up_at' => $this->follow_up_at ?: null,
-            'reminder_type' => $this->reminder_type ?: 'none',
-        ]);
+        $data = [
+            'quote_number' => $this->quote_number ?? 'QT-' . now()->format('Ymd') . '-' . rand(1000, 9999),
+            'equity_status' => $this->equity_status ?? 'not_applicable',
+            'currency' => $this->currency ?? 'USD',
+            'discount' => $this->discount ?? 0,
+            'deposit_required' => !is_null($this->deposit_required) ? filter_var($this->deposit_required, FILTER_VALIDATE_BOOLEAN) : false,
+            'can_convert_to_job' => !is_null($this->can_convert_to_job) ? filter_var($this->can_convert_to_job, FILTER_VALIDATE_BOOLEAN) : true,
+            'approval_status' => $this->approval_status ?? 'pending',
+        ];
+
+        // Map line_items to items for the service (if your service expects 'items')
+        if ($this->has('line_items')) {
+            $data['items'] = $this->line_items;
+        }
+
+        $this->merge($data);
     }
 }

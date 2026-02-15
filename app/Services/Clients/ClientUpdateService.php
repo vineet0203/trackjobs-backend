@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Log;
 class ClientUpdateService
 {
     public function __construct(
-        private FileAttachmentService $fileAttachmentService
+        private FileAttachmentService $fileAttachmentService,
+        private ClientAvailabilityService $availabilityService
     ) {}
 
     /**
@@ -35,6 +36,10 @@ class ClientUpdateService
             // Add updated_by
             $data['updated_by'] = $updatedBy;
 
+            // Extract availability data if present
+            $availabilityData = $data['availability_schedule'] ?? null;
+            unset($data['availability_schedule']);
+
             // Handle billing address logic
             if (isset($data['same_as_business_address']) && $data['same_as_business_address']) {
                 $data = $this->copyBusinessAddressToBilling($data, $client);
@@ -50,7 +55,12 @@ class ClientUpdateService
                     destinationPath: 'clients/logos',
                     allowedMimeTypes: FileValidationRules::getAllowedMimeTypes('images'),
                     maxSizeKb: FileValidationRules::getSizeLimits('images'),
-                    customFilename: $this->generateLogoFilename($client->business_name),
+                    customFilename: $this->generateLogoFilename(
+                        $client->business_name
+                            ?? trim(($client->first_name ?? '') . ' ' . ($client->last_name ?? ''))
+                            ?? 'client'
+                    ),
+
                     keepOriginalName: false,
                     removeField: 'remove_logo'
                 );
@@ -70,6 +80,14 @@ class ClientUpdateService
             $client->update($data);
             $client->refresh();
 
+            // Update or create availability schedule if data provided
+            if (!empty($availabilityData)) {
+                $this->handleAvailabilitySchedule($client, $availabilityData, $updatedBy);
+                Log::info('Availability schedule handled for client', [
+                    'client_id' => $client->id
+                ]);
+            }
+
             DB::commit();
 
             Log::info('Client updated successfully', [
@@ -81,11 +99,10 @@ class ClientUpdateService
                 'updated_by' => $updatedBy,
             ]);
 
-            return $client;
-
+            return $client->load('availabilitySchedules');
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             // Cleanup any temporary uploads if update failed
             if (isset($data['logo_temp_id'])) {
                 Log::info('Cleaning up temporary upload due to update failure', [
@@ -114,6 +131,30 @@ class ClientUpdateService
         $timestamp = time();
         $random = \Illuminate\Support\Str::random(6);
         return "logo_{$slug}_{$random}_{$timestamp}.png";
+    }
+
+    /**
+     * Handle availability schedule update or creation
+     */
+    private function handleAvailabilitySchedule(Client $client, array $data, int $updatedBy): void
+    {
+        // Check if client already has an active schedule
+        $existingSchedule = $client->activeAvailabilitySchedule;
+
+        if ($existingSchedule) {
+            // Update existing schedule
+            $this->availabilityService->updateSchedule($existingSchedule, $data, $updatedBy);
+            Log::info('Updated existing availability schedule', [
+                'client_id' => $client->id,
+                'schedule_id' => $existingSchedule->id
+            ]);
+        } else {
+            // Create new schedule
+            $this->availabilityService->createSchedule($client, $data, $updatedBy);
+            Log::info('Created new availability schedule', [
+                'client_id' => $client->id
+            ]);
+        }
     }
 
     /**
@@ -154,7 +195,6 @@ class ClientUpdateService
             ]);
 
             return $client->fresh();
-
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to verify client', [
@@ -171,12 +211,15 @@ class ClientUpdateService
     public function updateContactInfo(Client $client, array $contactInfo, int $updatedBy): Client
     {
         $allowedFields = [
-            'contact_person_name', 'designation', 'email', 
-            'mobile_number', 'alternate_mobile_number'
+            'contact_person_name',
+            'designation',
+            'email',
+            'mobile_number',
+            'alternate_mobile_number'
         ];
 
         $data = array_intersect_key($contactInfo, array_flip($allowedFields));
-        
+
         if (!empty($data)) {
             return $this->update($client, $data, $updatedBy);
         }
@@ -190,21 +233,17 @@ class ClientUpdateService
     public function updateAddress(Client $client, array $addressData, int $updatedBy): Client
     {
         $allowedFields = [
-            'address_line_1', 'address_line_2', 'city', 'state', 
-            'country', 'zip_code', 'same_as_business_address',
-            'billing_address_line_1', 'billing_address_line_2',
-            'billing_city', 'billing_state', 'billing_country',
-            'billing_zip_code'
+            'address_line_1',
+            'address_line_2',
+            'city',
+            'state',
+            'country',
+            'zip_code',
         ];
 
         $data = array_intersect_key($addressData, array_flip($allowedFields));
-        
-        if (!empty($data)) {
-            // Handle billing address logic
-            if (isset($data['same_as_business_address']) && $data['same_as_business_address']) {
-                $data = $this->copyBusinessAddressToBilling($data, $client);
-            }
 
+        if (!empty($data)) {
             return $this->update($client, $data, $updatedBy);
         }
 
@@ -217,12 +256,13 @@ class ClientUpdateService
     public function updatePaymentTerms(Client $client, array $paymentData, int $updatedBy): Client
     {
         $allowedFields = [
-            'payment_term', 'custom_payment_term', 
-            'preferred_currency', 'tax_percentage', 'tax_id'
+            'payment_term',
+            'preferred_currency',
+            'tax_percentage',
         ];
 
         $data = array_intersect_key($paymentData, array_flip($allowedFields));
-        
+
         if (!empty($data)) {
             return $this->update($client, $data, $updatedBy);
         }
@@ -259,49 +299,6 @@ class ClientUpdateService
         return $this->update($client, ['business_registration_number' => $registrationNumber], $updatedBy);
     }
 
-    /**
-     * Copy business address to billing address fields
-     */
-    private function copyBusinessAddressToBilling(array $data, Client $client): array
-    {
-        if (isset($data['address_line_1'])) {
-            $data['billing_address_line_1'] = $data['address_line_1'];
-        } elseif ($client->address_line_1) {
-            $data['billing_address_line_1'] = $client->address_line_1;
-        }
-
-        if (isset($data['address_line_2'])) {
-            $data['billing_address_line_2'] = $data['address_line_2'];
-        } elseif ($client->address_line_2) {
-            $data['billing_address_line_2'] = $client->address_line_2;
-        }
-
-        if (isset($data['city'])) {
-            $data['billing_city'] = $data['city'];
-        } elseif ($client->city) {
-            $data['billing_city'] = $client->city;
-        }
-
-        if (isset($data['state'])) {
-            $data['billing_state'] = $data['state'];
-        } elseif ($client->state) {
-            $data['billing_state'] = $client->state;
-        }
-
-        if (isset($data['country'])) {
-            $data['billing_country'] = $data['country'];
-        } elseif ($client->country) {
-            $data['billing_country'] = $client->country;
-        }
-
-        if (isset($data['zip_code'])) {
-            $data['billing_zip_code'] = $data['zip_code'];
-        } elseif ($client->zip_code) {
-            $data['billing_zip_code'] = $client->zip_code;
-        }
-
-        return $data;
-    }
 
     /**
      * Update client logo using temporary upload ID
@@ -325,18 +322,35 @@ class ClientUpdateService
     public function batchUpdate(Client $client, array $updates, int $updatedBy): Client
     {
         $allowedFields = [
-            'business_name', 'business_type', 'industry', 'business_registration_number',
-            'contact_person_name', 'designation', 'email', 'mobile_number', 'alternate_mobile_number',
-            'address_line_1', 'address_line_2', 'city', 'state', 'country', 'zip_code',
-            'billing_name', 'same_as_business_address', 'billing_address_line_1', 'billing_address_line_2',
-            'billing_city', 'billing_state', 'billing_country', 'billing_zip_code',
-            'payment_term', 'custom_payment_term', 'preferred_currency', 'tax_percentage', 'tax_id',
-            'website_url', 'client_category', 'notes', 'status', 'is_verified',
-            'logo_temp_id', 'remove_logo'
+            'business_name',
+            'business_type',
+            'industry',
+            'business_registration_number',
+            'contact_person_name',
+            'designation',
+            'email',
+            'mobile_number',
+            'alternate_mobile_number',
+            'address_line_1',
+            'address_line_2',
+            'city',
+            'state',
+            'country',
+            'zip_code',
+            'billing_name',
+            'payment_term',
+            'preferred_currency',
+            'tax_percentage',
+            'website_url',
+            'client_category',
+            'notes',
+            'status',
+            'logo_temp_id',
+            'remove_logo'
         ];
 
         $filteredData = array_intersect_key($updates, array_flip($allowedFields));
-        
+
         if (!empty($filteredData)) {
             return $this->update($client, $filteredData, $updatedBy);
         }

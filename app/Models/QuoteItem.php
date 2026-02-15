@@ -11,13 +11,13 @@ class QuoteItem extends Model
 
     protected $fillable = [
         'quote_id',
-        'name',
+        'item_name',
         'description',
         'quantity',
         'unit_price',
         'tax_rate',
         'tax_amount',
-        'total',
+        'item_total',
         'sort_order',
         'package_id',
     ];
@@ -26,7 +26,7 @@ class QuoteItem extends Model
         'unit_price' => 'decimal:2',
         'tax_rate' => 'decimal:2',
         'tax_amount' => 'decimal:2',
-        'total' => 'decimal:2',
+        'item_total' => 'decimal:2',
     ];
 
     /**
@@ -52,6 +52,6 @@ class QuoteItem extends Model
     {
         $subtotal = $this->unit_price * $this->quantity;
         $this->tax_amount = ($subtotal * $this->tax_rate) / 100;
-        $this->total = $subtotal + $this->tax_amount;
+       $this->item_total = $subtotal + $this->tax_amount;
     }
 }

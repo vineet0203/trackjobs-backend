@@ -17,37 +17,54 @@ class UpdateQuoteRequest extends FormRequest
         $quoteId = $this->route('quote');
 
         return [
-            // Quote Details
+            // Section 1: Quote Details
             'title' => 'sometimes|string|max:255',
+            'client_id' => 'sometimes|exists:clients,id',
             'client_name' => 'sometimes|string|max:191',
             'client_email' => 'sometimes|email|max:191',
-            
-            // Pricing
+            'equity_status' => 'sometimes|in:pending,approved,rejected,not_applicable',
+            'currency' => 'sometimes|string|size:3',
+
+            'line_items' => 'sometimes|array',
+            'line_items.*.id' => 'nullable|exists:quote_items,id',
+            'line_items.*.item_name' => 'required_with:line_items|string|max:255',
+            'line_items.*.description' => 'nullable|string',
+            'line_items.*.quantity' => 'required_with:line_items|integer|min:1',
+            'line_items.*.unit_price' => 'required_with:line_items|numeric|min:0',
+            'line_items.*.tax_rate' => 'nullable|numeric|between:0,100',
+            'line_items.*.package_id' => 'nullable|exists:packages,id',
+            'line_items.*._delete' => 'sometimes|boolean',
+
+            // Section 3: Pricing Summary
             'discount' => 'nullable|numeric|min:0',
-            'deposit_type' => 'sometimes|in:none,percentage,fixed,default',
-            'deposit_amount' => 'nullable|required_if:deposit_type,fixed|numeric|min:0',
-            'deposit_percentage' => 'nullable|required_if:deposit_type,percentage|numeric|between:1,100',
-            
-            // Status Updates
-            'status' => 'sometimes|in:draft,sent,pending,approved,rejected,expired',
+            'deposit_required' => 'sometimes|boolean',
+            'deposit_type' => 'required_if:deposit_required,true|in:percentage,fixed',
+            'deposit_amount' => 'required_if:deposit_required,true|numeric|min:0',
+
+            // Section 4: Client Approval
+            'approval_status' => 'sometimes|in:pending,accepted,rejected',
             'client_signature' => 'nullable|string',
-            
-            // Follow-ups
-            'follow_up_at' => 'nullable|date',
-            'reminder_type' => 'nullable|in:none,email,sms',
-            'follow_up_status' => 'nullable|in:scheduled,completed,cancelled',
+            'approval_date' => 'nullable|date',
+            'approval_action_date' => 'nullable|date',
+
+            // Section 5: Follow Ups & Reminders
+            'reminders' => 'sometimes|array',
+            'reminders.*.id' => 'nullable|sometimes',
+            'reminders.*.follow_up_schedule' => 'required_with:reminders|date',
+            'reminders.*.reminder_type' => 'required_with:reminders|in:email,sms,notification',
+            'reminders.*.reminder_status' => 'sometimes|in:scheduled,sent,cancelled',
+            'reminders.*._delete' => 'sometimes|boolean',
+
+            // Section 6: Conversion to Job
+            'can_convert_to_job' => 'sometimes|boolean',
+            'job_id' => 'nullable|exists:jobs,id',
+
+            // Status Updates
+            'status' => 'sometimes|in:draft,sent,viewed,expired',
+
+            // Meta
             'notes' => 'nullable|string',
-            
-            // Line Items (full replace or partial update)
-            'items' => 'sometimes|array|min:1',
-            'items.*.id' => 'nullable|exists:quote_items,id',
-            'items.*.name' => 'required_with:items|string|max:255',
-            'items.*.description' => 'nullable|string',
-            'items.*.quantity' => 'required_with:items|integer|min:1',
-            'items.*.unit_price' => 'required_with:items|numeric|min:0',
-            'items.*.tax_rate' => 'nullable|numeric|between:0,100',
-            'items.*.package_id' => 'nullable|exists:packages,id',
-            'items.*._delete' => 'sometimes|boolean', // For deleting items
+            'expires_at' => 'nullable|date|after:today',
         ];
     }
 
@@ -55,22 +72,29 @@ class UpdateQuoteRequest extends FormRequest
     {
         return [
             'client_email.email' => 'Please enter a valid email address.',
-            'items.*.name.required' => 'Item name is required.',
-            'items.*.quantity.required' => 'Item quantity is required.',
+            'items.*.item_name.required_with' => 'Item name is required for all items.',
+            'items.*.quantity.required_with' => 'Item quantity is required.',
             'items.*.quantity.min' => 'Quantity must be at least 1.',
-            'items.*.unit_price.required' => 'Unit price is required.',
+            'items.*.unit_price.required_with' => 'Unit price is required.',
             'items.*.unit_price.min' => 'Unit price cannot be negative.',
+            'deposit_type.required_if' => 'Deposit type is required when deposit is required.',
+            'deposit_amount.required_if' => 'Deposit amount is required when deposit is required.',
         ];
     }
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
-            'discount' => $this->discount ? (float) $this->discount : 0,
-            'deposit_amount' => $this->deposit_amount ? (float) $this->deposit_amount : null,
-            'deposit_percentage' => $this->deposit_percentage ? (float) $this->deposit_percentage : null,
-            'follow_up_at' => $this->follow_up_at ?: null,
-            'reminder_type' => $this->reminder_type ?: 'none',
-        ]);
+        $data = [
+            'discount' => $this->discount ?? 0,
+            'deposit_required' => !is_null($this->deposit_required) ? filter_var($this->deposit_required, FILTER_VALIDATE_BOOLEAN) : null,
+            'can_convert_to_job' => !is_null($this->can_convert_to_job) ? filter_var($this->can_convert_to_job, FILTER_VALIDATE_BOOLEAN) : null,
+        ];
+
+        // Map line_items to items if present
+        if ($this->has('line_items')) {
+            $data['items'] = $this->line_items;
+        }
+
+        $this->merge($data);
     }
 }

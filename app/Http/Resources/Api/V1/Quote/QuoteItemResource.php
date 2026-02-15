@@ -11,13 +11,13 @@ class QuoteItemResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name,
+            'item_name' => $this->item_name,
             'description' => $this->description,
             'quantity' => $this->quantity,
             'unit_price' => $this->unit_price,
             'tax_rate' => $this->tax_rate,
             'tax_amount' => $this->tax_amount,
-            'total' => $this->total,
+            'item_total' => $this->item_total,
             'sort_order' => $this->sort_order,
             'package_id' => $this->package_id,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),

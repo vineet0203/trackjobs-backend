@@ -17,7 +17,8 @@ class RegisterRequest extends FormRequest
         return [
             // Business/Vendor Information - matching migration columns
             'business_name' => 'required|string|max:191|unique:vendors,business_name',
-            'website_name' => 'required|string|url|max:191',
+            // 'website_name' => 'required|string|url|max:191',
+            'website_name' => 'required|string|max:191',
             
             // Personal Information
             'full_name' => 'required|string|max:191',
@@ -51,7 +52,7 @@ class RegisterRequest extends FormRequest
             'business_name.required' => 'Business name is required',
             'business_name.unique' => 'A business with this name already exists.',
             'website_name.required' => 'Website URL is required',
-            'website_name.url' => 'Please enter a valid website URL',
+            // 'website_name.url' => 'Please enter a valid website URL',
             'full_name.required' => 'Your full name is required',
             'email.required' => 'Email address is required',
             'email.email' => 'Please enter a valid email address',

@@ -43,19 +43,34 @@ class ClientController extends BaseController
     public function addClient(CreateClientRequest $request): JsonResponse
     {
         try {
-            Log::info('=== ADD CLIENT START ===', [
-                'vendor_id' => $request->vendor_id,
-                'business_name' => $request->business_name,
-                'ip' => $request->ip(),
-                'user_agent' => $request->userAgent()
+            // Log the ENTIRE request data
+            Log::info('=== RAW REQUEST DATA ===', [
+                'all' => $request->all(),
+                'validated' => $request->validated(),
+                'has_billing_name' => $request->has('billing_name'),
+                'billing_name' => $request->input('billing_name'),
+                'has_tax_percentage' => $request->has('tax_percentage'),
+                'tax_percentage' => $request->input('tax_percentage'),
+                'has_availability' => $request->has('availability_schedule'),
+                'availability' => $request->input('availability_schedule'),
             ]);
 
             // Request is automatically validated by CreateClientRequest
             $validatedData = $request->validated();
+            Log::info('=== VALIDATED DATA ===', [
+            'validated_keys' => array_keys($validatedData),
+            'has_billing_name' => isset($validatedData['billing_name']),
+            'billing_name' => $validatedData['billing_name'] ?? null,
+            'has_tax_percentage' => isset($validatedData['tax_percentage']),
+            'tax_percentage' => $validatedData['tax_percentage'] ?? null,
+            'has_availability' => isset($validatedData['availability_schedule']),
+        ]);
+
             $client = $this->clientCreationService->create($validatedData, auth()->id());
 
             Log::info('=== ADD CLIENT END ===', [
                 'client_id' => $client->id,
+                'has_schedule' => !empty($client->availabilitySchedules),
                 'status' => 'success'
             ]);
 
@@ -176,6 +191,7 @@ class ClientController extends BaseController
             Log::info('=== MODIFY CLIENT START ===', [
                 'vendor_id' => $vendorId,
                 'client_id' => $clientId,
+                'has_availability' => $request->has('availability_schedule'),
                 'updates' => array_keys($request->all()),
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent()

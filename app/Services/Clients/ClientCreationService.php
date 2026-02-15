@@ -112,6 +112,16 @@ class ClientCreationService
                 }
             }
 
+            // ✅ FIX: Explicitly add logo_temp_id to createData if it exists in original data
+            if (isset($data['logo_temp_id'])) {
+                $createData['logo_temp_id'] = $data['logo_temp_id'];
+                Log::info('✅ Logo temp_id added to createData', [
+                    'logo_temp_id' => $data['logo_temp_id']
+                ]);
+            } else {
+                Log::info('ℹ️ No logo_temp_id in request data');
+            }
+
             // Add created_by
             $createData['created_by'] = $createdBy;
             $createData['updated_by'] = $createdBy;
@@ -125,19 +135,25 @@ class ClientCreationService
                 'create_data_keys' => array_keys($createData),
                 'has_address' => isset($createData['address_line_1']),
                 'has_payment' => isset($createData['payment_term']),
+                'has_logo_temp_id' => isset($createData['logo_temp_id']) ? 'yes' : 'no',
+                'logo_temp_id' => $createData['logo_temp_id'] ?? null
             ]);
 
-            // Handle logo upload if present
-            if (isset($data['logo_temp_id'])) {
+            // ✅ FIX: Use $createData instead of $data for logo upload
+            if (isset($createData['logo_temp_id'])) {
+                Log::info('🖼️ Attempting to attach logo', [
+                    'temp_id' => $createData['logo_temp_id']
+                ]);
+                
                 $errors = $this->fileAttachmentService->attachFile(
-                    data: $createData,
+                    data: $createData,  // Changed from $data to $createData
                     tempIdField: 'logo_temp_id',
                     pathField: 'logo_path',
                     destinationPath: 'clients/logos',
                     allowedMimeTypes: FileValidationRules::getAllowedMimeTypes('images'),
                     maxSizeKb: FileValidationRules::getSizeLimits('images'),
                     customFilename: $this->generateLogoFilename(
-                        $data['business_name']
+                        $data['business_name']  // Keep using $data for business_name
                             ?? trim(($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? ''))
                             ?? 'client'
                     ),
@@ -147,6 +163,12 @@ class ClientCreationService
                 if (!empty($errors)) {
                     throw new \Exception(implode(', ', $errors['logo_temp_id'] ?? []));
                 }
+                
+                Log::info('✅ Logo attached successfully', [
+                    'logo_path' => $createData['logo_path'] ?? null
+                ]);
+            } else {
+                Log::info('ℹ️ No logo to attach - logo_temp_id not present');
             }
 
             Log::info('Creating client with data', [

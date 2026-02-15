@@ -178,7 +178,7 @@ class UpdateClientRequest extends FormRequest
             'logo_temp_id' => [
                 'nullable',
                 'string',
-                'regex:/^tmp_[a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12}$/'
+                'regex:/^tmp_[a-zA-Z0-9]+_[0-9]+$/'
             ],
             'remove_logo' => 'nullable|boolean',
 

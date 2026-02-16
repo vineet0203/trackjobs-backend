@@ -35,7 +35,7 @@ return new class extends Migration
             $table->timestamp('approval_action_date')->nullable();
 
             // Quote Status (separate from approval)
-            $table->enum('status', ['draft', 'sent', 'viewed', 'expired', 'pending', 'approved', 'rejected'])->default('draft');
+            $table->enum('status', ['draft', 'accepted', 'sent', 'viewed', 'expired', 'pending', 'approved', 'rejected'])->default('draft');
             $table->timestamp('sent_at')->nullable();
 
             // Conversion to Job (Section 6)

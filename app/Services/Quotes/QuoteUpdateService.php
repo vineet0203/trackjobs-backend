@@ -25,6 +25,7 @@ class QuoteUpdateService
             // Fields that can be directly updated
             $fillableFields = [
                 'title',
+                'client_id',
                 'equity_status',
                 'currency',
                 'discount',

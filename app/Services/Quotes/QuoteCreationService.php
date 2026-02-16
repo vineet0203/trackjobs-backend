@@ -54,7 +54,7 @@ class QuoteCreationService
                 'client_signature' => $data['client_signature'] ?? null,
                 'approval_date' => $data['approval_date'] ?? null,
                 'approval_action_date' => $data['approval_action_date'] ?? null,
-                'status' => 'draft',
+                'status' => $data['status'] ?? 'draft',
                 'can_convert_to_job' => $data['can_convert_to_job'] ?? true,
                 'notes' => $data['notes'] ?? null,
                 'vendor_id' => auth()->user()->vendor_id ?? null,
@@ -65,11 +65,11 @@ class QuoteCreationService
 
             // Create quote items - Check for both 'items' and 'line_items'
             $items = $data['items'] ?? $data['line_items'] ?? null;
-            
+
             if (!$items) {
                 throw new \Exception('No items provided for quote creation');
             }
-            
+
             $this->createQuoteItems($quote, $items);
 
             // Calculate totals

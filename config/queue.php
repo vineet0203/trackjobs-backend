@@ -36,20 +36,11 @@ return [
 
         'database' => [
             'driver' => 'database',
-            'table' => 'jobs',
+            'table' => 'queue_jobs',
             'queue' => 'default', // Default queue name
             'retry_after' => 90,
             'after_commit' => false,
         ],
-
-        // REMOVE this duplicate notifications connection
-        // 'notifications' => [
-        //     'driver' => 'database',
-        //     'table' => 'jobs',
-        //     'queue' => 'notifications',
-        //     'retry_after' => 90,
-        //     'after_commit' => false,
-        // ],
 
         'beanstalkd' => [
             'driver' => 'beanstalkd',

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Jobs\JobCreationService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -161,46 +162,46 @@ class Quote extends BaseModel
     /**
      * Calculate totals from items
      */
-/**
- * Calculate totals from items
- */
-public function calculateTotals(): self
-{
-    $subtotal = $this->items->sum(function ($item) {
-        return $item->quantity * $item->unit_price;
-    });
+    /**
+     * Calculate totals from items
+     */
+    public function calculateTotals(): self
+    {
+        $subtotal = $this->items->sum(function ($item) {
+            return $item->quantity * $item->unit_price;
+        });
 
-    $total = $this->items->sum(function ($item) {
-        $subtotal = $item->quantity * $item->unit_price;
-        $tax = $subtotal * ($item->tax_rate / 100);
-        return $subtotal + $tax;
-    });
+        $total = $this->items->sum(function ($item) {
+            $subtotal = $item->quantity * $item->unit_price;
+            $tax = $subtotal * ($item->tax_rate / 100);
+            return $subtotal + $tax;
+        });
 
-    $totalAmount = $total - ($this->discount ?? 0);
-    
-    $updateData = [
-        'subtotal' => $subtotal,
-        'total_amount' => $totalAmount,
-    ];
+        $totalAmount = $total - ($this->discount ?? 0);
 
-    // Handle deposit amount based on type
-    if ($this->deposit_required) {
-        if ($this->deposit_type === 'percentage') {
-            // If deposit_amount is stored as a percentage (e.g., 5 for 5%)
-            // Keep it as is - don't recalculate
-            // The frontend will calculate the actual amount for display
-        } else {
-            // For fixed amount, ensure it doesn't exceed total
-            if ($this->deposit_amount > $totalAmount) {
-                $updateData['deposit_amount'] = $totalAmount;
+        $updateData = [
+            'subtotal' => $subtotal,
+            'total_amount' => $totalAmount,
+        ];
+
+        // Handle deposit amount based on type
+        if ($this->deposit_required) {
+            if ($this->deposit_type === 'percentage') {
+                // If deposit_amount is stored as a percentage (e.g., 5 for 5%)
+                // Keep it as is - don't recalculate
+                // The frontend will calculate the actual amount for display
+            } else {
+                // For fixed amount, ensure it doesn't exceed total
+                if ($this->deposit_amount > $totalAmount) {
+                    $updateData['deposit_amount'] = $totalAmount;
+                }
             }
         }
+
+        $this->update($updateData);
+
+        return $this;
     }
-
-    $this->update($updateData);
-
-    return $this;
-}
 
     /**
      * Generate quote number
@@ -221,5 +222,26 @@ public function calculateTotals(): self
         $nextNumber = $lastNumber + 1;
 
         return $prefix . str_pad($nextNumber, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Check if quote can be converted to job
+     */
+    public function canBeConvertedToJob(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Convert quote to job
+     */
+    public function convertToJob(int $convertedBy): ?Job
+    {
+        if (!$this->canBeConvertedToJob()) {
+            throw new \Exception('Quote cannot be converted to job at this stage.');
+        }
+
+        // Use the service to create the job
+        return app(JobCreationService::class)->convertFromQuote($this->id, $convertedBy);
     }
 }

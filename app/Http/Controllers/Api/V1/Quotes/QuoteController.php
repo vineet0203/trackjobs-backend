@@ -455,4 +455,58 @@ class QuoteController extends BaseController
             );
         }
     }
+
+    /**
+     * Convert quote to job manually (For testing Purpose Only)
+     */
+    public function convertToJob(int $id): JsonResponse
+    {
+        try {
+            Log::info('=== MANUAL QUOTE TO JOB CONVERSION START ===', [
+                'quote_id' => $id,
+                'converted_by' => auth()->id(),
+            ]);
+
+            $quote = $this->quoteQueryService->getQuote($id);
+
+            if (!$quote) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            if (!$quote->canBeConvertedToJob()) {
+                return $this->errorResponse(
+                    'Quote cannot be converted to job. Check if it is approved and not already converted.',
+                    400
+                );
+            }
+
+            $Job = app(\App\Services\Jobs\JobCreationService::class)
+                ->convertFromQuote($quote->id, auth()->id());
+
+            Log::info('=== MANUAL QUOTE TO JOB CONVERSION END ===', [
+                'quote_id' => $quote->id,
+                'job_id' => $Job->id,
+                'status' => 'success'
+            ]);
+
+            return $this->successResponse(
+                [
+                    'quote' => new QuoteResource($quote->fresh()),
+                    'job' => new \App\Http\Resources\Api\V1\Job\JobResource($Job),
+                ],
+                'Quote successfully converted to work order.'
+            );
+        } catch (\Exception $e) {
+            Log::error('=== MANUAL QUOTE TO JOB CONVERSION END ===', [
+                'quote_id' => $id,
+                'status' => 'error',
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Failed to convert quote to job: ' . $e->getMessage(),
+                500
+            );
+        }
+    }
 }

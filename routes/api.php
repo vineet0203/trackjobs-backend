@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\DeploymentController;
 use App\Http\Controllers\Api\V1\Quotes\QuoteController;
 use App\Http\Controllers\Api\V1\SignedFileController;
 use App\Http\Controllers\Api\V1\UploadController;
+use App\Http\Controllers\Api\V1\Jobs\JobController;
 use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -25,6 +26,8 @@ Route::middleware(['api'])->group(function () {
             'timestamp' => now()->toISOString(),
         ]);
     });
+
+
 
     // Get analytics for specific IP
     Route::get('/analytics/ip/{ip}', function (string $ip) {
@@ -130,6 +133,37 @@ Route::middleware(['jwt.verify'])->group(function () {
             Route::delete('/{id}', [QuoteController::class, 'destroy']);
             Route::post('/{id}/send', [QuoteController::class, 'send']);
             Route::post('/{id}/follow-up-status', [QuoteController::class, 'updateFollowUpStatus']);
+            Route::post('/{id}/convert-to-job', [QuoteController::class, 'convertToJob']);
+        });
+
+        // ============================================
+        // WORK ORDER MANAGEMENT ROUTES (JOBS)
+        // ============================================
+        Route::prefix('jobs')->group(function () {
+            // Statistics
+            Route::get('/statistics', [JobController::class, 'statistics']);
+
+            // Get by work order number
+            Route::get('/number/{JobNumber}', [JobController::class, 'showByNumber']);
+
+            // CRUD operations
+            Route::get('/', [JobController::class, 'index']);
+            Route::post('/', [JobController::class, 'store']);
+            Route::get('/{id}', [JobController::class, 'show']);
+            Route::put('/{id}', [JobController::class, 'update']);
+            Route::delete('/{id}', [JobController::class, 'destroy']);
+
+            // Status update
+            Route::patch('/{id}/status', [JobController::class, 'updateStatus']);
+
+            // Task management
+            Route::post('/{id}/tasks', [JobController::class, 'addTask']);
+            Route::patch('/{id}/tasks/{taskId}/toggle', [JobController::class, 'toggleTask']);
+            Route::delete('/{id}/tasks/{taskId}', [JobController::class, 'deleteTask']);
+
+            // Attachment management
+            Route::post('/{id}/attachments', [JobController::class, 'addAttachment']);
+            Route::delete('/{id}/attachments/{attachmentId}', [JobController::class, 'deleteAttachment']);
         });
 
         // ============================================

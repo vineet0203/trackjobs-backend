@@ -8,7 +8,7 @@ use App\Http\Requests\Api\V1\Auth\LoginRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Requests\Api\V1\Auth\ResetPasswordRequest;
 use App\Http\Requests\Api\V1\Auth\UpdatePasswordRequest;
-use App\Http\Resources\Api\V1\User\UserResource;
+use App\Http\Resources\Api\V1\User\AuthUserResource;
 use App\Services\Auth\AuthService;
 use App\Services\Auth\PasswordService;
 use Illuminate\Http\JsonResponse;
@@ -62,13 +62,11 @@ class AuthController extends BaseController
             $user = $this->authService->register($validatedData);
 
             return $this->createdResponse(
-                new UserResource($user),
+                new AuthUserResource($user),
                 'Registration successful!'
             );
-
         } catch (ValidationException $e) {
             return $this->validationErrorResponse($e->errors());
-
         } catch (\Exception $e) {
             return $this->errorResponse(
                 'Registration failed. Please try again.',
@@ -323,7 +321,7 @@ class AuthController extends BaseController
             }
 
             // Create resource with context
-            $resource = new UserResource($user);
+            $resource = new AuthUserResource($user);
             $resource->additional([
                 'meta' => [
                     'requested_includes' => [

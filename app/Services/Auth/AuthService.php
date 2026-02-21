@@ -3,13 +3,9 @@
 namespace App\Services\Auth;
 
 
-use App\Http\Resources\Api\V1\User\UserResource;
+use App\Http\Resources\Api\V1\User\AuthUserResource;
 use App\Models\User;
 use App\Models\UserSecurityLog;
-use App\Notifications\PasswordResetNotification;
-use App\Services\Role\RoleService;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 
 
@@ -191,7 +187,7 @@ class AuthService
             'access_token' => $token,
             'token_type' => 'bearer',
             'expires_in' => auth()->factory()->getTTL() * 60,
-            'user' => new UserResource($user),
+            'user' => new AuthUserResource($user),
         ];
     }
 

@@ -14,7 +14,15 @@ class JobQueryService
     public function getJobs(array $filters, int $perPage = 15): LengthAwarePaginator
     {
         // Add 'attachments' to the with array
-        $query = Job::with(['client', 'assignedTo', 'tasks', 'attachments']);
+        $query = Job::with([
+            'client',
+            'tasks',
+            'attachments',
+            'activities',
+            'assignedTo',
+            'createdBy',
+            'updatedBy'
+        ]);
 
         // Apply filters
         if (!empty($filters['search'])) {
@@ -68,10 +76,11 @@ class JobQueryService
 
         return $query->paginate($perPage);
     }
+
     /**
      * Get single work order by ID
      */
-    public function getJob(int $id, array $with = ['client', 'quote', 'tasks', 'attachments', 'activities'])
+    public function getJob(int $id, array $with = ['client', 'quote', 'tasks', 'activities', 'assignedTo', 'createdBy', 'updatedBy'])
     {
         $query = Job::query();
 
@@ -79,15 +88,20 @@ class JobQueryService
             $query->with($with);
         }
 
+        // Always load attachments with their context
+        $query->with(['attachments' => function ($query) {
+            $query->orderBy('created_at', 'desc');
+        }]);
+
         return $query->find($id);
     }
 
     /**
      * Get work order by work order number
      */
-    public function getJobByNumber(string $JobNumber, array $with = ['client', 'tasks', 'attachments', 'activities'])
+    public function getJobByNumber(string $jobNumber, array $with = ['client', 'tasks', 'attachments', 'activities', 'assignedTo', 'createdBy', 'updatedBy'])
     {
-        $query = Job::where('job_number', $JobNumber);
+        $query = Job::where('job_number', $jobNumber);
 
         if (!empty($with)) {
             $query->with($with);

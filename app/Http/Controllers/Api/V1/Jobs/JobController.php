@@ -13,6 +13,7 @@ use App\Http\Resources\Api\V1\Job\JobCollection;
 use App\Http\Resources\Api\V1\Job\JobResource;
 use App\Http\Resources\Api\V1\Job\JobTaskResource;
 use App\Http\Resources\Api\V1\Job\JobAttachmentResource;
+use App\Models\JobAttachment;
 // use App\Http\Resources\Api\V1\Jobs\JobActivityResource;
 use App\Services\Jobs\JobCreationService;
 use App\Services\Jobs\JobQueryService;
@@ -154,7 +155,16 @@ class JobController extends BaseController
                 'job_id' => $id,
             ]);
 
-            $Job = $this->JobQueryService->getJob($id, ['client','quote', 'tasks', 'attachments', 'activities']);
+            $Job = $this->JobQueryService->getJob($id, [
+                'client',
+                'quote',
+                'tasks',
+                'attachments',
+                'activities',
+                'assignedTo',
+                'createdBy',
+                'updatedBy'
+            ]);
 
             if (!$Job) {
                 Log::warning('Job not found', [
@@ -198,7 +208,15 @@ class JobController extends BaseController
                 'job_number' => $JobNumber,
             ]);
 
-            $Job = $this->JobQueryService->getJobByNumber($JobNumber, ['client', 'tasks', 'attachments', 'activities']);
+            $Job = $this->JobQueryService->getJobByNumber($JobNumber, [
+                'client',
+                'tasks',
+                'attachments',
+                'activities',
+                'assignedTo',
+                'createdBy',
+                'updatedBy'
+            ]);
 
             if (!$Job) {
                 return $this->notFoundResponse('Job not found.');
@@ -507,11 +525,22 @@ class JobController extends BaseController
     /**
      * Add attachment to job
      */
+
     public function addAttachment(AddAttachmentRequest $request, int $id): JsonResponse
     {
         try {
+            // Log ALL request data to see what's coming
             Log::info('=== ADD ATTACHMENT TO JOB START ===', [
                 'job_id' => $id,
+                'all_request_data' => $request->all(),
+                'request_input' => $request->input(),
+                'request_post' => $request->post(),
+                'request_has_context' => $request->has('context'),
+                'context_value_from_input' => $request->input('context'),
+                'context_value_from_post' => $request->post('context'),
+                'context_value_from_all' => $request->all()['context'] ?? null,
+                'files' => $request->allFiles(),
+                'headers' => $request->headers->all(),
             ]);
 
             $Job = $this->JobQueryService->getJob($id);
@@ -520,16 +549,39 @@ class JobController extends BaseController
                 return $this->notFoundResponse('Job not found.');
             }
 
+            // Try multiple ways to get context
+            $context = $request->input('context') ??
+                $request->post('context') ??
+                ($request->all()['context'] ?? JobAttachment::CONTEXT_GENERAL);
+
+            Log::info('Context after extraction', [
+                'context' => $context,
+                'type' => gettype($context),
+                'method_used' => $context === $request->input('context') ? 'input' : ($context === $request->post('context') ? 'post' : 'all')
+            ]);
+
+            // Validate context is allowed
+            $allowedContexts = [JobAttachment::CONTEXT_GENERAL, JobAttachment::CONTEXT_INSTRUCTIONS];
+            if (!in_array($context, $allowedContexts)) {
+                $context = JobAttachment::CONTEXT_GENERAL;
+                Log::warning('Context not allowed, defaulting to general', [
+                    'provided_context' => $context
+                ]);
+            }
+
             $attachment = $this->JobAttachmentService->addAttachment(
                 $Job,
                 $request->file('file'),
                 auth()->id(),
-                $request->input('file_name')
+                $request->input('file_name'),
+                $context
             );
 
             Log::info('=== ADD ATTACHMENT TO JOB END ===', [
                 'job_id' => $Job->id,
                 'attachment_id' => $attachment->id,
+                'context' => $context,
+                'saved_context' => $attachment->context,
                 'status' => 'success'
             ]);
 
@@ -542,15 +594,15 @@ class JobController extends BaseController
                 'job_id' => $id,
                 'status' => 'error',
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
 
             return $this->errorResponse(
-                'Failed to add attachment.',
+                'Failed to add attachment: ' . $e->getMessage(),
                 500
             );
         }
     }
-
     /**
      * Delete attachment
      */

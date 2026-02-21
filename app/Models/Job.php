@@ -74,19 +74,19 @@ class Job extends BaseModel
     {
         $year = now()->format('Y');
         $month = now()->format('m');
-        
+
         $lastJob = self::whereYear('created_at', now()->year)
             ->whereMonth('created_at', now()->month)
             ->orderBy('id', 'desc')
             ->first();
-        
+
         if ($lastJob) {
             $lastNumber = intval(substr($lastJob->job_number, -4));
             $newNumber = str_pad($lastNumber + 1, 4, '0', STR_PAD_LEFT);
         } else {
             $newNumber = '0001';
         }
-        
+
         return "WO-{$year}{$month}-{$newNumber}";
     }
 
@@ -119,8 +119,8 @@ class Job extends BaseModel
      */
     public function canBeStarted(): bool
     {
-        return in_array($this->status, ['pending', 'scheduled']) && 
-               !$this->start_date?->isFuture();
+        return in_array($this->status, ['pending', 'scheduled']) &&
+            !$this->start_date?->isFuture();
     }
 
     /**
@@ -129,7 +129,7 @@ class Job extends BaseModel
     public function canBeCompleted(): bool
     {
         return in_array($this->status, ['in_progress', 'scheduled']) &&
-               $this->tasks->where('completed', false)->count() === 0;
+            $this->tasks->where('completed', false)->count() === 0;
     }
 
     /**
@@ -178,6 +178,23 @@ class Job extends BaseModel
     public function attachments()
     {
         return $this->hasMany(JobAttachment::class);
+    }
+
+    // Context-specific attachment relationships
+    public function generalAttachments()
+    {
+        return $this->hasMany(JobAttachment::class)->where('context', JobAttachment::CONTEXT_GENERAL);
+    }
+
+    public function instructionAttachments()
+    {
+        return $this->hasMany(JobAttachment::class)->where('context', JobAttachment::CONTEXT_INSTRUCTIONS);
+    }
+
+    // Optional: Get all attachments for a specific section
+    public function getSectionAttachments(string $section)
+    {
+        return $this->attachments()->where('context', $section)->get();
     }
 
     public function activities()

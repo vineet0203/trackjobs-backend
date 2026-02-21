@@ -16,6 +16,7 @@ class JobAttachment extends Model
 
     protected $fillable = [
         'job_id',
+        'context', // 'general', 'instructions', 'notes', 'task', etc.
         'file_name',
         'file_path',
         'file_type',
@@ -30,6 +31,33 @@ class JobAttachment extends Model
         'metadata' => 'array',
         'file_size' => 'integer',
     ];
+
+    // Context constants
+    const CONTEXT_GENERAL = 'general';
+    const CONTEXT_INSTRUCTIONS = 'instructions';
+    const CONTEXT_NOTES = 'notes';
+    const CONTEXT_TASK = 'task';
+
+    // Scopes for filtering by context
+    public function scopeGeneral($query)
+    {
+        return $query->where('context', self::CONTEXT_GENERAL);
+    }
+
+    public function scopeInstructions($query)
+    {
+        return $query->where('context', self::CONTEXT_INSTRUCTIONS);
+    }
+
+    public function scopeNotes($query)
+    {
+        return $query->where('context', self::CONTEXT_NOTES);
+    }
+
+    public function scopeByContext($query, string $context)
+    {
+        return $query->where('context', $context);
+    }
 
     /**
      * Get file extension
@@ -60,7 +88,7 @@ class JobAttachment extends Model
     public function getIconAttribute(): string
     {
         $extension = strtolower($this->extension);
-        
+
         $icons = [
             'pdf' => 'picture_as_pdf',
             'jpg' => 'image',

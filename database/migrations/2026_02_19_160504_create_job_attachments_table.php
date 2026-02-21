@@ -10,6 +10,7 @@ return new class extends Migration {
         Schema::create('job_attachments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('job_id')->constrained()->cascadeOnDelete();
+            $table->string('context')->default('general');
             $table->string('file_name');
             $table->string('file_path');
             $table->string('file_type');

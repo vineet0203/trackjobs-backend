@@ -41,7 +41,7 @@ return new class extends Migration
             // Conversion to Job (Section 6)
             $table->boolean('can_convert_to_job')->default(true);
             $table->boolean('is_converted')->default(false);
-            $table->foreignId('job_id')->nullable()->constrained('jobs')->onDelete('set null');
+            $table->foreignId('job_id')->nullable()->onDelete('set null');
             $table->timestamp('converted_at')->nullable();
             $table->foreignId('converted_by')->nullable()->constrained('users')->onDelete('set null');
 

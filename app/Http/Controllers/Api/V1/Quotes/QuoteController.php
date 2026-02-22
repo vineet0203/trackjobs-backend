@@ -6,8 +6,10 @@ use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Requests\Api\V1\Quotes\CreateQuoteRequest;
 use App\Http\Requests\Api\V1\Quotes\UpdateQuoteRequest;
 use App\Http\Requests\Api\V1\Quotes\GetQuotesRequest;
+use App\Http\Resources\Api\V1\Job\JobResource;
 use App\Http\Resources\Api\V1\Quote\QuoteCollection;
 use App\Http\Resources\Api\V1\Quote\QuoteResource;
+use App\Services\Jobs\JobCreationService;
 use App\Services\Quotes\QuoteCreationService;
 use App\Services\Quotes\QuoteQueryService;
 use App\Services\Quotes\QuoteUpdateService;
@@ -105,6 +107,9 @@ class QuoteController extends BaseController
     /**
      * Get all quotes with filtering and pagination
      */
+    /**
+     * Get all quotes with filtering and pagination - only for authenticated vendor
+     */
     public function index(GetQuotesRequest $request): JsonResponse
     {
         try {
@@ -115,6 +120,21 @@ class QuoteController extends BaseController
             ]);
 
             $validated = $request->validated();
+
+            // Get the authenticated user's vendor_id
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
+            // Add vendor_id to filters to restrict quotes
+            $validated['vendor_id'] = $vendorId;
+
             $quotes = $this->quoteQueryService->getQuotes($validated, $validated['per_page'] ?? 15);
 
             $appliedFilters = $this->quoteQueryService->getAppliedFilters($validated);
@@ -122,6 +142,7 @@ class QuoteController extends BaseController
             Log::info('=== GET QUOTES END ===', [
                 'total_quotes' => $quotes->total(),
                 'current_page' => $quotes->currentPage(),
+                'vendor_id' => $vendorId,
                 'status' => 'success'
             ]);
 
@@ -480,7 +501,7 @@ class QuoteController extends BaseController
                 );
             }
 
-            $Job = app(\App\Services\Jobs\JobCreationService::class)
+            $Job = app(JobCreationService::class)
                 ->convertFromQuote($quote->id, auth()->id());
 
             Log::info('=== MANUAL QUOTE TO JOB CONVERSION END ===', [
@@ -492,7 +513,7 @@ class QuoteController extends BaseController
             return $this->successResponse(
                 [
                     'quote' => new QuoteResource($quote->fresh()),
-                    'job' => new \App\Http\Resources\Api\V1\Job\JobResource($Job),
+                    'job' => new JobResource($Job),
                 ],
                 'Quote successfully converted to work order.'
             );

@@ -24,6 +24,11 @@ class JobQueryService
             'updatedBy'
         ]);
 
+        // Apply vendor_id filter (from authenticated user)
+        if (!empty($filters['vendor_id'])) {
+            $query->where('vendor_id', $filters['vendor_id']);
+        }
+
         // Apply filters
         if (!empty($filters['search'])) {
             $search = $filters['search'];
@@ -82,7 +87,9 @@ class JobQueryService
      */
     public function getJob(int $id, array $with = ['client', 'quote', 'tasks', 'activities', 'assignedTo', 'createdBy', 'updatedBy'])
     {
-        $query = Job::query();
+        $vendorId = auth()->user()->vendor_id;
+
+        $query = Job::where('vendor_id', $vendorId);
 
         if (!empty($with)) {
             $query->with($with);
@@ -101,7 +108,10 @@ class JobQueryService
      */
     public function getJobByNumber(string $jobNumber, array $with = ['client', 'tasks', 'attachments', 'activities', 'assignedTo', 'createdBy', 'updatedBy'])
     {
-        $query = Job::where('job_number', $jobNumber);
+        $vendorId = auth()->user()->vendor_id;
+
+        $query = Job::where('job_number', $jobNumber)
+            ->where('vendor_id', $vendorId);
 
         if (!empty($with)) {
             $query->with($with);
@@ -167,6 +177,7 @@ class JobQueryService
             'assigned_to' => 'Assigned To',
             'date_from' => 'Date From',
             'date_to' => 'Date To',
+            'vendor_id' => 'Vendor ID', // Added vendor_id
         ];
 
         foreach ($filters as $key => $value) {

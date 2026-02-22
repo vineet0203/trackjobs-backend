@@ -121,6 +121,11 @@ class QuoteQueryService
      */
     private function applyFilters(Builder $query, array $filters): Builder
     {
+        // Filter by vendor_id (added for vendor-specific filtering)
+        if (!empty($filters['vendor_id'])) {
+            $query->where('vendor_id', $filters['vendor_id']);
+        }
+
         // Filter by status
         if (!empty($filters['status']) && $filters['status'] !== 'all') {
             $query->where('status', $filters['status']);
@@ -200,7 +205,8 @@ class QuoteQueryService
             'client_name',
             'date_from',
             'date_to',
-            'follow_up_status'
+            'follow_up_status',
+            'vendor_id'  // Added vendor_id
         ];
 
         foreach ($filterableFields as $field) {

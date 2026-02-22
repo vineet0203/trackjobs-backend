@@ -18,12 +18,12 @@ class RegisterRequest extends FormRequest
             // Business/Vendor Information - matching migration columns
             'business_name' => 'required|string|max:191|unique:vendors,business_name',
             'website_name' => 'required|string|url|max:191',
-            
+
             // Personal Information
             'full_name' => 'required|string|max:191',
             'email' => 'required|email|max:191|unique:users,email',
             'mobile_number' => 'required|string|max:50',
-            
+
             // Password
             'password' => [
                 'required',
@@ -35,10 +35,10 @@ class RegisterRequest extends FormRequest
                     ->numbers()
                     ->symbols()
             ],
-            
+
             // Terms agreement
             'terms_accepted' => 'required|boolean|accepted',
-            
+
             // Optional fields - matching vendor migration columns
             'business_type' => 'nullable|string|in:plumbing,carpentry,electrical,cleaning,other',
             'service_description' => 'nullable|string|max:500',
@@ -69,7 +69,7 @@ class RegisterRequest extends FormRequest
         // Split full_name into first_name and last_name for user creation
         $fullName = $this->full_name ?? '';
         $nameParts = explode(' ', $fullName, 2);
-        
+
         $this->merge([
             'business_name' => $this->businessName ?? $this->business_name,
             'website_name' => $this->websiteName ?? $this->website_name,
@@ -87,11 +87,11 @@ class RegisterRequest extends FormRequest
     public function validated($key = null, $default = null)
     {
         $validated = parent::validated($key, $default);
-        
+
         // Add processed fields
         $validated['first_name'] = $this->input('first_name');
         $validated['last_name'] = $this->input('last_name');
-        
+
         return $validated;
     }
 }

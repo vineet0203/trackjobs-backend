@@ -96,8 +96,9 @@ class JobController extends BaseController
         }
     }
 
+
     /**
-     * Get all job with filtering and pagination
+     * Get all jobs with filtering and pagination - only for authenticated vendor
      */
     public function index(GetJobRequest $request): JsonResponse
     {
@@ -108,6 +109,21 @@ class JobController extends BaseController
             ]);
 
             $validated = $request->validated();
+
+            // Get the authenticated user's vendor_id
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
+            // Add vendor_id to filters to restrict jobs
+            $validated['vendor_id'] = $vendorId;
+
             $jobs = $this->JobQueryService->getJobs($validated, $validated['per_page'] ?? 15);
 
             $appliedFilters = $this->JobQueryService->getAppliedFilters($validated);
@@ -115,6 +131,7 @@ class JobController extends BaseController
             Log::info('=== GET WORK ORDERS END ===', [
                 'total_jobs' => $jobs->total(),
                 'current_page' => $jobs->currentPage(),
+                'vendor_id' => $vendorId,
                 'status' => 'success'
             ]);
 

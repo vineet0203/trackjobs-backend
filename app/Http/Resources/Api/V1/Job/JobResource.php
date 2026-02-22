@@ -3,7 +3,6 @@
 
 namespace App\Http\Resources\Api\V1\Job;
 
-use App\Http\Resources\Api\V1\Quote\QuoteResource;
 use App\Http\Resources\Api\V1\User\UserResource;
 use App\Models\JobAttachment;
 use Illuminate\Http\Resources\Json\JsonResource;

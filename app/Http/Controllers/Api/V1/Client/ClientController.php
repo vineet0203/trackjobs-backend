@@ -58,13 +58,13 @@ class ClientController extends BaseController
             // Request is automatically validated by CreateClientRequest
             $validatedData = $request->validated();
             Log::info('=== VALIDATED DATA ===', [
-            'validated_keys' => array_keys($validatedData),
-            'has_billing_name' => isset($validatedData['billing_name']),
-            'billing_name' => $validatedData['billing_name'] ?? null,
-            'has_tax_percentage' => isset($validatedData['tax_percentage']),
-            'tax_percentage' => $validatedData['tax_percentage'] ?? null,
-            'has_availability' => isset($validatedData['availability_schedule']),
-        ]);
+                'validated_keys' => array_keys($validatedData),
+                'has_billing_name' => isset($validatedData['billing_name']),
+                'billing_name' => $validatedData['billing_name'] ?? null,
+                'has_tax_percentage' => isset($validatedData['tax_percentage']),
+                'tax_percentage' => $validatedData['tax_percentage'] ?? null,
+                'has_availability' => isset($validatedData['availability_schedule']),
+            ]);
 
             $client = $this->clientCreationService->create($validatedData, auth()->id());
 
@@ -143,9 +143,24 @@ class ClientController extends BaseController
     /**
      * Get a single client by ID for a specific vendor
      */
-    public function getVendorClient(int $vendorId, int $clientId): JsonResponse
+    public function getVendorClient(int $clientId): JsonResponse
     {
         try {
+            // Get the authenticated user's vendor_id
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
+            Log::info('=== GET VENDOR CLIENT START ===', [
+                'vendor_id' => $vendorId,
+                'client_id' => $clientId,
+            ]);
 
             $client = $this->clientQueryService->getClient($vendorId, $clientId);
 
@@ -159,6 +174,7 @@ class ClientController extends BaseController
             }
 
             Log::info('=== GET VENDOR CLIENT END ===', [
+                'vendor_id' => $vendorId,
                 'client_id' => $client->id,
                 'status' => 'success'
             ]);
@@ -169,7 +185,6 @@ class ClientController extends BaseController
             );
         } catch (\Exception $e) {
             Log::error('=== GET VENDOR CLIENT END ===', [
-                'vendor_id' => $vendorId,
                 'client_id' => $clientId,
                 'status' => 'error',
                 'error' => $e->getMessage(),

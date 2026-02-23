@@ -224,7 +224,14 @@ class QuoteCreationService
      */
     public function validateDuplicateQuote(string $clientEmail, string $title): bool
     {
-        return Quote::where('client_email', $clientEmail)
+        $vendorId = auth()->user()->vendor_id;
+
+        if (!$vendorId) {
+            return false;
+        }
+
+        return Quote::where('vendor_id', $vendorId)
+            ->where('client_email', $clientEmail)
             ->where('title', 'like', '%' . $title . '%')
             ->whereIn('status', ['draft', 'sent', 'pending'])
             ->exists();

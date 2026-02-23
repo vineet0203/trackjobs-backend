@@ -127,6 +127,18 @@ class JobQueryService
     {
         $vendorId = auth()->user()->vendor_id;
 
+        if (!$vendorId) {
+            return [
+                'total' => 0,
+                'by_status' => [],
+                'by_priority' => [],
+                'upcoming' => 0,
+                'overdue' => 0,
+                'total_revenue' => 0,
+                'pending_payment' => 0,
+            ];
+        }
+
         return [
             'total' => Job::where('vendor_id', $vendorId)->count(),
             'by_status' => [

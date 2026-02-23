@@ -179,17 +179,34 @@ class QuoteController extends BaseController
     public function show(int $id): JsonResponse
     {
         try {
+            // Get vendor_id from authenticated user
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             Log::info('=== GET QUOTE START ===', [
                 'quote_id' => $id,
+                'vendor_id' => $vendorId
             ]);
 
             $quote = $this->quoteQueryService->getQuote($id);
 
             if (!$quote) {
-                Log::warning('Quote not found', [
-                    'quote_id' => $id,
-                ]);
+                return $this->notFoundResponse('Quote not found.');
+            }
 
+            // Double-check that the quote belongs to this vendor
+            if ($quote->vendor_id !== $vendorId) {
+                Log::warning('Vendor ID mismatch', [
+                    'quote_vendor_id' => $quote->vendor_id,
+                    'user_vendor_id' => $vendorId
+                ]);
                 return $this->notFoundResponse('Quote not found.');
             }
 
@@ -223,13 +240,29 @@ class QuoteController extends BaseController
     public function showByNumber(string $quoteNumber): JsonResponse
     {
         try {
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             Log::info('=== GET QUOTE BY NUMBER START ===', [
                 'quote_number' => $quoteNumber,
+                'vendor_id' => $vendorId
             ]);
 
             $quote = $this->quoteQueryService->getQuoteByNumber($quoteNumber);
 
             if (!$quote) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            // Double-check vendor_id
+            if ($quote->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Quote not found.');
             }
 
@@ -263,8 +296,19 @@ class QuoteController extends BaseController
     public function update(UpdateQuoteRequest $request, int $id): JsonResponse
     {
         try {
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             Log::info('=== UPDATE QUOTE START ===', [
                 'quote_id' => $id,
+                'vendor_id' => $vendorId,
                 'updates' => array_keys($request->all()),
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent()
@@ -273,6 +317,16 @@ class QuoteController extends BaseController
             $quote = $this->quoteQueryService->getQuote($id);
 
             if (!$quote) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            // Verify quote belongs to this vendor
+            if ($quote->vendor_id !== $vendorId) {
+                Log::warning('Unauthorized update attempt', [
+                    'quote_id' => $id,
+                    'quote_vendor_id' => $quote->vendor_id,
+                    'user_vendor_id' => $vendorId
+                ]);
                 return $this->notFoundResponse('Quote not found.');
             }
 
@@ -407,10 +461,32 @@ class QuoteController extends BaseController
         try {
             Log::info('=== GET QUOTE STATISTICS START ===');
 
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                // Return empty statistics instead of error
+                return $this->successResponse(
+                    [
+                        'total' => 0,
+                        'draft' => 0,
+                        'sent' => 0,
+                        'pending' => 0,
+                        'approved' => 0,
+                        'rejected' => 0,
+                        'expired' => 0,
+                        'total_amount' => 0,
+                        'by_month' => [],
+                    ],
+                    'Quote statistics retrieved successfully.'
+                );
+            }
+
             $statistics = $this->quoteQueryService->getQuoteStatistics();
 
             Log::info('=== GET QUOTE STATISTICS END ===', [
-                'status' => 'success'
+                'status' => 'success',
+                'vendor_id' => $vendorId
             ]);
 
             return $this->successResponse(

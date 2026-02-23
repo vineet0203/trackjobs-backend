@@ -168,6 +168,17 @@ class JobController extends BaseController
     public function show(int $id): JsonResponse
     {
         try {
+
+            // Get vendor_id from authenticated user
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             Log::info('=== GET JOB START ===', [
                 'job_id' => $id,
             ]);
@@ -183,11 +194,12 @@ class JobController extends BaseController
                 'updatedBy'
             ]);
 
-            if (!$Job) {
-                Log::warning('Job not found', [
-                    'job_id' => $id,
+            // Double-check that the job belongs to this vendor (additional safety)
+            if ($Job && $Job->vendor_id !== $vendorId) {
+                Log::warning('Vendor ID mismatch', [
+                    'job_vendor_id' => $Job->vendor_id,
+                    'user_vendor_id' => $vendorId
                 ]);
-
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -218,14 +230,24 @@ class JobController extends BaseController
     /**
      * Get a job by job number
      */
-    public function showByNumber(string $JobNumber): JsonResponse
+    public function showByNumber(string $jobNumber): JsonResponse
     {
         try {
             Log::info('=== GET JOB BY NUMBER START ===', [
-                'job_number' => $JobNumber,
+                'job_number' => $jobNumber,
             ]);
 
-            $Job = $this->JobQueryService->getJobByNumber($JobNumber, [
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
+            $Job = $this->JobQueryService->getJobByNumber($jobNumber, [
                 'client',
                 'tasks',
                 'attachments',
@@ -235,7 +257,8 @@ class JobController extends BaseController
                 'updatedBy'
             ]);
 
-            if (!$Job) {
+            // Double-check vendor_id
+            if ($Job && $Job->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -251,7 +274,7 @@ class JobController extends BaseController
             );
         } catch (\Exception $e) {
             Log::error('=== GET JOB BY NUMBER END ===', [
-                'job_number' => $JobNumber,
+                'job_number' => $jobNumber,
                 'status' => 'error',
                 'error' => $e->getMessage(),
             ]);
@@ -275,9 +298,29 @@ class JobController extends BaseController
                 'ip' => $request->ip()
             ]);
 
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $Job = $this->JobQueryService->getJob($id);
 
             if (!$Job) {
+                return $this->notFoundResponse('Job not found.');
+            }
+
+            // Verify job belongs to this vendor
+            if ($Job->vendor_id !== $vendorId) {
+                Log::warning('Unauthorized update attempt', [
+                    'job_id' => $id,
+                    'job_vendor_id' => $Job->vendor_id,
+                    'user_vendor_id' => $vendorId
+                ]);
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -320,9 +363,19 @@ class JobController extends BaseController
                 'new_status' => request('status'),
             ]);
 
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $Job = $this->JobQueryService->getJob($id);
 
-            if (!$Job) {
+            if (!$Job || $Job->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -367,9 +420,23 @@ class JobController extends BaseController
                 'deleted_by' => auth()->id(),
             ]);
 
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $Job = $this->JobQueryService->getJob($id);
 
             if (!$Job) {
+                return $this->notFoundResponse('Job not found.');
+            }
+
+            if ($Job->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -418,9 +485,23 @@ class JobController extends BaseController
                 'job_id' => $id,
             ]);
 
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $Job = $this->JobQueryService->getJob($id);
 
             if (!$Job) {
+                return $this->notFoundResponse('Job not found.');
+            }
+
+            if ($Job->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -461,9 +542,24 @@ class JobController extends BaseController
                 'task_id' => $taskId,
             ]);
 
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $Job = $this->JobQueryService->getJob($id);
 
             if (!$Job) {
+                return $this->notFoundResponse('Job not found.');
+            }
+
+            // Verify job belongs to this vendor
+            if ($Job->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -506,9 +602,24 @@ class JobController extends BaseController
                 'task_id' => $taskId,
             ]);
 
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $Job = $this->JobQueryService->getJob($id);
 
             if (!$Job) {
+                return $this->notFoundResponse('Job not found.');
+            }
+
+            // Verify job belongs to this vendor
+            if ($Job->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -560,9 +671,19 @@ class JobController extends BaseController
                 'headers' => $request->headers->all(),
             ]);
 
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $Job = $this->JobQueryService->getJob($id);
 
-            if (!$Job) {
+            if (!$Job || $Job->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -631,9 +752,25 @@ class JobController extends BaseController
                 'attachment_id' => $attachmentId,
             ]);
 
+            // MISSING: Vendor validation
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $Job = $this->JobQueryService->getJob($id);
 
             if (!$Job) {
+                return $this->notFoundResponse('Job not found.');
+            }
+
+            // Verify job belongs to this vendor
+            if ($Job->vendor_id !== $vendorId) {
                 return $this->notFoundResponse('Job not found.');
             }
 
@@ -671,6 +808,25 @@ class JobController extends BaseController
     {
         try {
             Log::info('=== GET JOB STATISTICS START ===');
+
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                // Return empty statistics instead of error
+                return $this->successResponse(
+                    [
+                        'total' => 0,
+                        'by_status' => [],
+                        'by_priority' => [],
+                        'upcoming' => 0,
+                        'overdue' => 0,
+                        'total_revenue' => 0,
+                        'pending_payment' => 0,
+                    ],
+                    'Job statistics retrieved successfully.'
+                );
+            }
 
             $statistics = $this->JobQueryService->getJobStatistics();
 

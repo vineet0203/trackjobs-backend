@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Log;
 class JobCreationService
 {
     /**
-     * Create a new work order with tasks
+     * Create a new job with tasks
      */
     public function create(array $data, int $createdBy): Job
     {
@@ -24,13 +24,13 @@ class JobCreationService
             // Fetch client details
             $client = Client::findOrFail($data['client_id']);
 
-            // Generate work order number
+            // Generate job number
             $JobNumber = Job::generateJobNumber();
 
             // Calculate balance due
             $balanceDue = ($data['total_amount'] ?? 0) - ($data['paid_amount'] ?? 0);
 
-            // Create work order
+            // Create job
             $Job = Job::create([
                 'job_number' => $JobNumber,
                 'title' => $data['title'],
@@ -79,11 +79,11 @@ class JobCreationService
             }
 
             // Log activity
-            $this->logActivity($Job, 'created', 'Work order created', $createdBy);
+            $this->logActivity($Job, 'created', 'Job created', $createdBy);
 
             DB::commit();
 
-            Log::info('Work order created successfully', [
+            Log::info('Job created successfully', [
                 'job_id' => $Job->id,
                 'job_number' => $Job->job_number,
                 'client_id' => $Job->client_id,
@@ -93,7 +93,7 @@ class JobCreationService
             return $Job;
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Failed to create work order', [
+            Log::error('Failed to create job', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'data' => $data,
@@ -103,7 +103,7 @@ class JobCreationService
     }
 
     /**
-     * Create tasks for work order
+     * Create tasks for job
      */
     private function createTasks(Job $Job, array $tasks, int $createdBy): void
     {
@@ -120,14 +120,14 @@ class JobCreationService
             ]);
         }
 
-        Log::info('Tasks created for work order', [
+        Log::info('Tasks created for job', [
             'job_id' => $Job->id,
             'tasks_count' => count($tasks),
         ]);
     }
 
     /**
-     * Create attachments for work order
+     * Create attachments for job
      */
     private function createAttachments(Job $Job, array $attachments, int $uploadedBy): void
     {
@@ -144,7 +144,7 @@ class JobCreationService
             ]);
         }
 
-        Log::info('Attachments created for work order', [
+        Log::info('Attachments created for job', [
             'job_id' => $Job->id,
             'attachments_count' => count($attachments),
         ]);
@@ -164,24 +164,29 @@ class JobCreationService
     }
 
     /**
-     * Convert quote to work order automatically
+     * Convert quote to job automatically
      */
     public function convertFromQuote(int $quoteId, int $convertedBy): Job
     {
         $quote = Quote::with(['client', 'items', 'client.vendor'])->findOrFail($quoteId);
 
+        $vendorId = auth()->user()->vendor_id;
+        if ($quote->client->vendor_id !== $vendorId) {
+            throw new \Exception('Quote does not belong to your vendor account.');
+        }
+
         if (!$quote->can_convert_to_job) {
-            throw new \Exception('This quote cannot be converted to a work order.');
+            throw new \Exception('This quote cannot be converted to a job.');
         }
 
         if ($quote->is_converted) {
-            throw new \Exception('This quote has already been converted to a work order.');
+            throw new \Exception('This quote has already been converted to a job.');
         }
 
         DB::beginTransaction();
 
         try {
-            // Prepare work order data from quote
+            // Prepare job data from quote
             $data = [
                 'title' => $quote->title,
                 'description' => "Auto-generated from approved quote #{$quote->quote_number}",
@@ -211,7 +216,7 @@ class JobCreationService
             }
             $data['tasks'] = $tasks;
 
-            // Create the work order (job)
+            // Create the job (job)
             $Job = $this->create($data, $convertedBy);
 
             // Mark quote as converted
@@ -224,7 +229,7 @@ class JobCreationService
             ]);
 
             // Log the automatic conversion
-            Log::info('Quote automatically converted to work order', [
+            Log::info('Quote automatically converted to job', [
                 'quote_id' => $quote->id,
                 'quote_number' => $quote->quote_number,
                 'job_id' => $Job->id,
@@ -238,7 +243,7 @@ class JobCreationService
             return $Job->load(['client', 'tasks']);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Failed to auto-convert quote to work order', [
+            Log::error('Failed to auto-convert quote to job', [
                 'quote_id' => $quoteId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),

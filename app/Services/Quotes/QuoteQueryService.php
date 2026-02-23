@@ -46,7 +46,14 @@ class QuoteQueryService
      */
     public function getQuote(int $quoteId): ?Quote
     {
-        return Quote::with(['items', 'creator', 'updater', 'reminders'])
+        $vendorId = auth()->user()->vendor_id;
+
+        if (!$vendorId) {
+            return null;
+        }
+
+        return Quote::where('vendor_id', $vendorId)
+            ->with(['items', 'creator', 'updater', 'reminders'])
             ->find($quoteId);
     }
 
@@ -55,7 +62,14 @@ class QuoteQueryService
      */
     public function getQuoteByNumber(string $quoteNumber): ?Quote
     {
-        return Quote::where('quote_number', $quoteNumber)
+        $vendorId = auth()->user()->vendor_id;
+
+        if (!$vendorId) {
+            return null;
+        }
+
+        return Quote::where('vendor_id', $vendorId)
+            ->where('quote_number', $quoteNumber)
             ->with(['items', 'creator'])
             ->first();
     }
@@ -65,7 +79,14 @@ class QuoteQueryService
      */
     public function getQuotesByClient(string $clientEmail): Collection
     {
-        return Quote::where('client_email', $clientEmail)
+        $vendorId = auth()->user()->vendor_id;
+
+        if (!$vendorId) {
+            return collect(); // Return empty collection
+        }
+
+        return Quote::where('vendor_id', $vendorId)
+            ->where('client_email', $clientEmail)
             ->with(['items'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -76,7 +97,14 @@ class QuoteQueryService
      */
     public function getQuotesByStatus(string $status): Collection
     {
-        return Quote::where('status', $status)
+        $vendorId = auth()->user()->vendor_id;
+
+        if (!$vendorId) {
+            return collect();
+        }
+
+        return Quote::where('vendor_id', $vendorId)
+            ->where('status', $status)
             ->with(['items'])
             ->orderBy('created_at', 'desc')
             ->get();
@@ -87,7 +115,14 @@ class QuoteQueryService
      */
     public function getQuotesNeedingFollowUp(): Collection
     {
-        return Quote::where('follow_up_status', 'scheduled')
+        $vendorId = auth()->user()->vendor_id;
+
+        if (!$vendorId) {
+            return collect();
+        }
+
+        return Quote::where('vendor_id', $vendorId)
+            ->where('follow_up_status', 'scheduled')
             ->where('follow_up_at', '<=', now())
             ->with(['items'])
             ->get();
@@ -98,16 +133,33 @@ class QuoteQueryService
      */
     public function getQuoteStatistics(): array
     {
+        $vendorId = auth()->user()->vendor_id;
+
+        if (!$vendorId) {
+            return [
+                'total' => 0,
+                'draft' => 0,
+                'sent' => 0,
+                'pending' => 0,
+                'approved' => 0,
+                'rejected' => 0,
+                'expired' => 0,
+                'total_amount' => 0,
+                'by_month' => [],
+            ];
+        }
+
         return [
-            'total' => Quote::count(),
-            'draft' => Quote::where('status', 'draft')->count(),
-            'sent' => Quote::where('status', 'sent')->count(),
-            'pending' => Quote::where('status', 'pending')->count(),
-            'approved' => Quote::where('status', 'approved')->count(),
-            'rejected' => Quote::where('status', 'rejected')->count(),
-            'expired' => Quote::where('status', 'expired')->count(),
-            'total_amount' => Quote::where('status', 'approved')->sum('total_amount'),
-            'by_month' => Quote::selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, COUNT(*) as count')
+            'total' => Quote::where('vendor_id', $vendorId)->count(),
+            'draft' => Quote::where('vendor_id', $vendorId)->where('status', 'draft')->count(),
+            'sent' => Quote::where('vendor_id', $vendorId)->where('status', 'sent')->count(),
+            'pending' => Quote::where('vendor_id', $vendorId)->where('status', 'pending')->count(),
+            'approved' => Quote::where('vendor_id', $vendorId)->where('status', 'approved')->count(),
+            'rejected' => Quote::where('vendor_id', $vendorId)->where('status', 'rejected')->count(),
+            'expired' => Quote::where('vendor_id', $vendorId)->where('status', 'expired')->count(),
+            'total_amount' => Quote::where('vendor_id', $vendorId)->where('status', 'approved')->sum('total_amount'),
+            'by_month' => Quote::where('vendor_id', $vendorId)
+                ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, COUNT(*) as count')
                 ->groupBy('month')
                 ->orderBy('month', 'desc')
                 ->limit(6)

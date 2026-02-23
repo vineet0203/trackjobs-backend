@@ -43,46 +43,31 @@ class ClientController extends BaseController
     public function addClient(CreateClientRequest $request): JsonResponse
     {
         try {
-            // Log the ENTIRE request data
-            Log::info('=== RAW REQUEST DATA ===', [
-                'all' => $request->all(),
-                'validated' => $request->validated(),
-                'has_billing_name' => $request->has('billing_name'),
-                'billing_name' => $request->input('billing_name'),
-                'has_tax_percentage' => $request->has('tax_percentage'),
-                'tax_percentage' => $request->input('tax_percentage'),
-                'has_availability' => $request->has('availability_schedule'),
-                'availability' => $request->input('availability_schedule'),
-            ]);
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
 
-            // Request is automatically validated by CreateClientRequest
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             $validatedData = $request->validated();
-            Log::info('=== VALIDATED DATA ===', [
-                'validated_keys' => array_keys($validatedData),
-                'has_billing_name' => isset($validatedData['billing_name']),
-                'billing_name' => $validatedData['billing_name'] ?? null,
-                'has_tax_percentage' => isset($validatedData['tax_percentage']),
-                'tax_percentage' => $validatedData['tax_percentage'] ?? null,
-                'has_availability' => isset($validatedData['availability_schedule']),
-            ]);
+
+            // Explicitly set vendor_id from authenticated user
+            $validatedData['vendor_id'] = $vendorId;
 
             $client = $this->clientCreationService->create($validatedData, auth()->id());
-
-            Log::info('=== ADD CLIENT END ===', [
-                'client_id' => $client->id,
-                'has_schedule' => !empty($client->availabilitySchedules),
-                'status' => 'success'
-            ]);
 
             return $this->createdResponse(
                 new ClientResource($client),
                 'Client added successfully.'
             );
         } catch (\Exception $e) {
-            Log::error('=== ADD CLIENT END ===', [
-                'status' => 'error',
+            Log::error('Failed to add client', [
                 'error' => $e->getMessage(),
-                'vendor_id' => $request->vendor_id,
+                'vendor_id' => $vendorId ?? null,
             ]);
 
             return $this->errorResponse(
@@ -95,27 +80,30 @@ class ClientController extends BaseController
     /**
      * Get all clients for a specific vendor with filtering and pagination
      */
-    public function getVendorClients(GetClientsRequest $request, int $vendorId): JsonResponse
+    public function getVendorClients(GetClientsRequest $request): JsonResponse
     {
         try {
+            // Get vendor_id from authenticated user
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             Log::info('=== GET VENDOR CLIENTS START ===', [
                 'vendor_id' => $vendorId,
                 'filters' => $request->all(),
-                'ip' => $request->ip(),
-                'user_agent' => $request->userAgent()
+                'user_id' => $user->id
             ]);
 
-            // Request is automatically validated by GetClientsRequest
             $validated = $request->validated();
             $clients = $this->clientQueryService->getClients($vendorId, $validated, $validated['per_page'] ?? 15);
 
             $appliedFilters = $this->clientQueryService->getAppliedFilters($validated);
-
-            Log::info('=== GET VENDOR CLIENTS END ===', [
-                'vendor_id' => $vendorId,
-                'total_clients' => $clients->total(),
-                'status' => 'success'
-            ]);
 
             return $this->successResponse(
                 new ClientCollection($clients),
@@ -128,8 +116,6 @@ class ClientController extends BaseController
             );
         } catch (\Exception $e) {
             Log::error('=== GET VENDOR CLIENTS END ===', [
-                'vendor_id' => $vendorId,
-                'status' => 'error',
                 'error' => $e->getMessage(),
             ]);
 
@@ -200,33 +186,35 @@ class ClientController extends BaseController
     /**
      * Update a client for a vendor
      */
-    public function modifyClient(UpdateClientRequest $request, int $vendorId, int $clientId): JsonResponse
+    public function modifyClient(UpdateClientRequest $request, int $clientId): JsonResponse
     {
         try {
+            // Get vendor_id from authenticated user
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             Log::info('=== MODIFY CLIENT START ===', [
                 'vendor_id' => $vendorId,
                 'client_id' => $clientId,
-                'has_availability' => $request->has('availability_schedule'),
-                'updates' => array_keys($request->all()),
-                'ip' => $request->ip(),
-                'user_agent' => $request->userAgent()
+                'user_id' => $user->id
             ]);
 
-            // Check if client exists BEFORE validation
+            // Check if client exists for this vendor
             $client = $this->clientQueryService->getClient($vendorId, $clientId);
 
             if (!$client) {
                 return $this->notFoundResponse('Client not found.');
             }
 
-            // Now run validation since we know client exists
             $validatedData = $request->validated();
             $client = $this->clientUpdateService->update($client, $validatedData, auth()->id());
-
-            Log::info('=== MODIFY CLIENT END ===', [
-                'client_id' => $client->id,
-                'status' => 'success'
-            ]);
 
             return $this->successResponse(
                 new ClientResource($client),
@@ -234,9 +222,7 @@ class ClientController extends BaseController
             );
         } catch (\Exception $e) {
             Log::error('=== MODIFY CLIENT END ===', [
-                'vendor_id' => $vendorId,
                 'client_id' => $clientId,
-                'status' => 'error',
                 'error' => $e->getMessage(),
             ]);
 
@@ -250,9 +236,20 @@ class ClientController extends BaseController
     /**
      * Delete/soft delete a client
      */
-    public function removeClient(int $vendorId, int $clientId): JsonResponse
+    public function removeClient(int $clientId): JsonResponse
     {
         try {
+            // Get vendor_id from authenticated user
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
             Log::info('=== REMOVE CLIENT START ===', [
                 'vendor_id' => $vendorId,
                 'client_id' => $clientId,
@@ -271,16 +268,11 @@ class ClientController extends BaseController
             if (!$canDelete['can_delete']) {
                 return $this->errorResponse(
                     $canDelete['message'],
-                    409 // Conflict status code
+                    409
                 );
             }
 
             $this->clientDeletionService->softDelete($client, auth()->id());
-
-            Log::info('=== REMOVE CLIENT END ===', [
-                'client_id' => $clientId,
-                'status' => 'success'
-            ]);
 
             return $this->successResponse(
                 null,
@@ -288,9 +280,7 @@ class ClientController extends BaseController
             );
         } catch (\Exception $e) {
             Log::error('=== REMOVE CLIENT END ===', [
-                'vendor_id' => $vendorId,
                 'client_id' => $clientId,
-                'status' => 'error',
                 'error' => $e->getMessage(),
             ]);
 

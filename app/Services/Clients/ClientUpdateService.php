@@ -83,7 +83,7 @@ class ClientUpdateService
                 'mobile_number',
                 'alternate_mobile_number',
                 'website_url',
-                'client_category',
+                'service_category',
                 'notes',
                 'status',
                 'logo_temp_id',
@@ -246,7 +246,7 @@ class ClientUpdateService
      */
     public function updateCategory(Client $client, string $category, int $updatedBy): Client
     {
-        return $this->update($client, ['client_category' => $category], $updatedBy);
+        return $this->update($client, ['service_category' => $category], $updatedBy);
     }
 
     /**

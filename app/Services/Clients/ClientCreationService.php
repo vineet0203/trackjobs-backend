@@ -94,7 +94,7 @@ class ClientCreationService
                 'mobile_number',
                 'alternate_mobile_number',
                 'website_url',
-                'client_category',
+                'service_category',
                 'notes',
                 'vendor_id',
                 'created_by',

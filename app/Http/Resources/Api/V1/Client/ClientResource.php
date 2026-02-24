@@ -49,7 +49,7 @@ class ClientResource extends JsonResource
             ],
             'website_url' => $this->website_url,
             'logo' => $this->getSignedUrlData($this->logo_path),
-            'client_category' => $this->client_category,
+            'service_category' => $this->service_category,
             'notes' => $this->notes,
             //'status' => $this->status,
             'created_by' => $this->created_by,

@@ -18,7 +18,7 @@ class GetClientsRequest extends FormRequest
             'page' => 'nullable|integer|min:1',
             'search' => 'nullable|string|max:191',
             'business_type' => 'nullable|in:individual,sole_proprietorship,partnership,llc,corporation,non_profit,government,other',
-            'client_category' => 'nullable|in:premium,regular,vip,strategic,new,at_risk',
+            'service_category' => 'nullable|in:premium,regular,vip,strategic,new,at_risk',
             'status' => 'nullable|in:active,inactive,suspended,archived',
             'is_verified' => 'nullable|boolean',
             'city' => 'nullable|string|max:191',
@@ -26,7 +26,7 @@ class GetClientsRequest extends FormRequest
             'country' => 'nullable|string|max:191',
             'created_from' => 'nullable|date',
             'created_to' => 'nullable|date|after_or_equal:created_from',
-            'sort_by' => 'nullable|in:id,business_name,contact_person_name,email,created_at,updated_at,status,client_category,business_type',
+            'sort_by' => 'nullable|in:id,business_name,contact_person_name,email,created_at,updated_at,status,service_category,business_type',
             'sort_order' => 'nullable|in:asc,desc',
         ];
     }

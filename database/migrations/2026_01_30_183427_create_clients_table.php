@@ -33,7 +33,7 @@ return new class extends Migration
             $table->decimal('tax_percentage', 5, 2)->nullable();
             $table->string('website_url')->nullable();
             $table->string('logo_path')->nullable();
-            $table->enum('client_category', ['premium', 'regular', 'vip', 'strategic', 'new', 'at_risk'])->default('regular');
+            $table->string('service_category', 100)->nullable()->default(null);
 
             // ---------- Common for both ----------
             $table->string('email')->nullable();                // unified
@@ -61,7 +61,7 @@ return new class extends Migration
             // Indexes
             $table->index(['vendor_id', 'status']);
             $table->index('email');
-            $table->index('client_category');
+            $table->index('service_category');
         });
     }
 

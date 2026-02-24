@@ -68,7 +68,7 @@ class ClientQueryService
     public function getClientsByCategory(int $vendorId, string $category): Collection
     {
         return Client::where('vendor_id', $vendorId)
-            ->where('client_category', $category)
+            ->where('service_category', $category)
             ->get();
     }
 
@@ -101,12 +101,12 @@ class ClientQueryService
             'total' => Client::where('vendor_id', $vendorId)->count(),
             'active' => Client::where('vendor_id', $vendorId)->where('status', 'active')->count(),
             'inactive' => Client::where('vendor_id', $vendorId)->where('status', 'inactive')->count(),
-            'premium' => Client::where('vendor_id', $vendorId)->where('client_category', 'premium')->count(),
+            'premium' => Client::where('vendor_id', $vendorId)->where('service_category', 'premium')->count(),
             'verified' => Client::where('vendor_id', $vendorId)->where('is_verified', true)->count(),
             'by_category' => Client::where('vendor_id', $vendorId)
-                ->select('client_category', DB::raw('count(*) as count'))
-                ->groupBy('client_category')
-                ->pluck('count', 'client_category')
+                ->select('service_category', DB::raw('count(*) as count'))
+                ->groupBy('service_category')
+                ->pluck('count', 'service_category')
                 ->toArray(),
             'by_business_type' => Client::where('vendor_id', $vendorId)
                 ->select('business_type', DB::raw('count(*) as count'))
@@ -141,9 +141,9 @@ class ClientQueryService
             $query->where('industry', 'like', '%' . $filters['industry'] . '%');
         }
 
-        // Filter by client_category
-        if (!empty($filters['client_category'])) {
-            $query->where('client_category', $filters['client_category']);
+        // Filter by service_category
+        if (!empty($filters['service_category'])) {
+            $query->where('service_category', $filters['service_category']);
         }
 
         // Filter by status
@@ -211,7 +211,7 @@ class ClientQueryService
             'created_at',
             'updated_at',
             'status',
-            'client_category',
+            'service_category',
             'business_type',
             'city',
             'country'
@@ -233,7 +233,7 @@ class ClientQueryService
         $filterableFields = [
             'business_type',
             'industry',
-            'client_category',
+            'service_category',
             'status',
             'is_verified',
             'city',

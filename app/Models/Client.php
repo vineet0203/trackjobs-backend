@@ -35,7 +35,7 @@ class Client extends BaseModel
         'tax_percentage',
         'website_url',
         'logo_path',
-        'client_category',
+        'service_category',
         'notes',
         'status',
         'created_by',

@@ -19,7 +19,7 @@ class JobClientResource extends JsonResource
             'contact_email' => $this->email,
             'contact_phone' => $this->mobile_number,
             // Metadata
-            'category' => $this->client_category,
+            'category' => $this->service_category,
         ];
     }
 

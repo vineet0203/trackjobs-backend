@@ -17,6 +17,38 @@ class CreateClientRequest extends FormRequest
     {
         $vendorId = $this->route('vendorId') ?? $this->vendor_id;
         $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        $allowedCategories = [
+            'handyman',
+            'plumbing',
+            'electrical',
+            'hvac',
+            'home_cleaning',
+            'roof_repair',
+            'home_renovation',
+            'landscaping',
+            'pest_control',
+            'appliance_repair',
+            'flooring',
+            'painting',
+            'window_glass',
+            'home_security',
+            'pool_maintenance',
+            'commercial_plumbing',
+            'commercial_electrical',
+            'commercial_hvac',
+            'commercial_cleaning',
+            'commercial_roofing',
+            'office_renovation',
+            'commercial_landscaping',
+            'fire_protection',
+            'commercial_security',
+            'elevator_maintenance',
+            'industrial_equipment',
+            'commercial_flooring',
+            'signage_installation',
+            'it_network',
+            'facility_management'
+        ];
 
         $rules = [
             /*
@@ -156,7 +188,7 @@ class CreateClientRequest extends FormRequest
             |--------------------------------------------------------------------------
             */
             'website_url' => 'nullable|url|max:191',
-            'client_category' => 'nullable|in:premium,regular,vip,strategic,new,at_risk',
+            'service_category' => ['required', Rule::in($allowedCategories)],
             'notes' => 'nullable|string',
 
             /*
@@ -211,7 +243,6 @@ class CreateClientRequest extends FormRequest
             'vendor_id' => $this->route('vendorId') ?? $this->vendor_id,
             'logo_temp_id' => $rawLogoId ?: null,
             'website_url' => $this->prepareWebsiteUrl($this->website_url),
-            'client_category' => $this->client_category ?? 'regular',
         ];
 
         // Handle tax percentage

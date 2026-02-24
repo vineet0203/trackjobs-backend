@@ -129,7 +129,7 @@ class ClientController extends BaseController
     /**
      * Get a single client by ID for a specific vendor
      */
-    public function getVendorClient(int $vendorId, int $clientId): JsonResponse
+    public function getVendorClient(int $clientId): JsonResponse
     {
         try {
             // Get the authenticated user's vendor_id
@@ -188,6 +188,7 @@ class ClientController extends BaseController
      */
     public function modifyClient(UpdateClientRequest $request, int $clientId): JsonResponse
     {
+        
         try {
             // Get vendor_id from authenticated user
             $user = auth()->user();

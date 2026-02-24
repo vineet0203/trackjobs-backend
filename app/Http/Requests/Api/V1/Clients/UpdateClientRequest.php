@@ -11,7 +11,8 @@ class UpdateClientRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        $vendorId = $this->route('vendorId');
+        // Get vendor_id from authenticated user
+        $vendorId = auth()->user()->vendor_id;
         $clientId = $this->route('clientId');
 
         $clientExists = DB::table('clients')
@@ -37,7 +38,8 @@ class UpdateClientRequest extends FormRequest
 
     public function rules(): array
     {
-        $vendorId = $this->route('vendorId');
+        // Get vendor_id from authenticated user
+        $vendorId = auth()->user()->vendor_id;
         $clientId = $this->route('clientId');
         $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
         $allowedCategories = [

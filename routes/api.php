@@ -91,16 +91,16 @@ Route::middleware(['jwt.verify'])->group(function () {
         // ============================================
         // CLIENT MANAGEMENT ROUTES
         // ============================================
-        Route::prefix('{vendorId}/clients')->group(function () {
-            // Get all clients for a vendor with filters
+        Route::prefix('clients')->group(function () {
+            // Get all clients for the authenticated vendor with filters
             Route::get('/', [ClientController::class, 'getVendorClients']);
-            // Get a specific client for a vendor
+            // Get a specific client for the authenticated vendor
             Route::get('/{clientId}', [ClientController::class, 'getVendorClient']);
-            // Add a new client for a vendor
+            // Add a new client for the authenticated vendor
             Route::post('/', [ClientController::class, 'addClient']);
-            // Update a client for a vendor
+            // Update a client for the authenticated vendor
             Route::put('/{clientId}', [ClientController::class, 'modifyClient']);
-            // Delete a client for a vendor
+            // Delete a client for the authenticated vendor
             Route::delete('/{clientId}', [ClientController::class, 'removeClient']);
 
             // ============================================
@@ -170,7 +170,7 @@ Route::middleware(['jwt.verify'])->group(function () {
         // DIRECT AVAILABILITY SCHEDULE MANAGEMENT
         // (For updating/deleting specific schedules)
         // ============================================
-        Route::prefix('{vendorId}/availability-schedules')->group(function () {
+        Route::prefix('availability-schedules')->group(function () {
             // Update specific availability schedule
             Route::put('/{scheduleId}', [ClientAvailabilityController::class, 'update']);
             // Delete specific availability schedule

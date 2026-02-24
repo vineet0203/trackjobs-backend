@@ -15,7 +15,8 @@ class CreateClientRequest extends FormRequest
 
     public function rules(): array
     {
-        $vendorId = $this->route('vendorId') ?? $this->vendor_id;
+        // Get vendor_id from authenticated user
+        $vendorId = auth()->user()->vendor_id;
         $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
         $allowedCategories = [
             'handyman',
@@ -56,7 +57,7 @@ class CreateClientRequest extends FormRequest
             | Core
             |--------------------------------------------------------------------------
             */
-            'vendor_id' => 'required|exists:vendors,id',
+            // Remove vendor_id from rules - it will be set from auth in controller/service
             'client_type' => 'required|in:commercial,residential',
 
             /*
@@ -240,7 +241,7 @@ class CreateClientRequest extends FormRequest
 
         // Prepare base data
         $data = [
-            'vendor_id' => $this->route('vendorId') ?? $this->vendor_id,
+            // Remove vendor_id from here - it will be set in controller/service
             'logo_temp_id' => $rawLogoId ?: null,
             'website_url' => $this->prepareWebsiteUrl($this->website_url),
         ];

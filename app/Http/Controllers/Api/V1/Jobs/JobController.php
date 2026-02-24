@@ -334,7 +334,15 @@ class JobController extends BaseController
             ]);
 
             return $this->successResponse(
-                new JobResource($Job->load(['client', 'tasks'])),
+                new JobResource($Job->load([
+                    'client',
+                    'tasks',
+                    'attachments',
+                    'quote',
+                    'assignedTo',
+                    'createdBy',
+                    'updatedBy'
+                ])),
                 'Job updated successfully.'
             );
         } catch (\Exception $e) {

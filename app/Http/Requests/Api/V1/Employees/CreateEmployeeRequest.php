@@ -1,0 +1,164 @@
+<?php
+
+namespace App\Http\Requests\Api\V1\Employees;
+
+use App\Services\File\FileValidationRules;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class CreateEmployeeRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        $vendorId = auth()->user()->vendor_id;
+
+        return [
+            /*
+            |--------------------------------------------------------------------------
+            | Basic Information
+            |--------------------------------------------------------------------------
+            */
+            'employee_id' => [
+                'nullable', // Changed from 'required' to 'nullable'
+                'string',
+                'max:191',
+                'regex:/^[A-Z0-9-]+$/',
+                Rule::unique('employees')->where(
+                    fn($q) => $q->where('vendor_id', $vendorId)
+                ),
+            ],
+            'first_name' => 'required|string|max:191',
+            'last_name' => 'nullable|string|max:191',
+            'date_of_birth' => 'nullable|date|before_or_equal:today',
+            'gender' => 'nullable|in:male,female,other',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Contact Details
+            |--------------------------------------------------------------------------
+            */
+            'email' => [
+                'required',
+                'email',
+                'max:191',
+                Rule::unique('employees')->where(
+                    fn($q) => $q->where('vendor_id', $vendorId)
+                ),
+            ],
+            'mobile_number' => 'required|string|max:20',
+            'address' => 'nullable|string|max:500',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Official Details
+            |--------------------------------------------------------------------------
+            */
+            'designation' => 'required|string|max:191',
+            'department' => 'required|string|max:191',
+            'reporting_manager_id' => [
+                'nullable',
+                'integer',
+                'min:1',
+                Rule::exists('employees', 'id')->where(
+                    fn($q) => $q->where('vendor_id', $vendorId)
+                        ->where('is_active', true)
+                ),
+            ],
+            'role' => 'nullable|in:admin,manager,employee,supervisor',
+            'is_active' => 'nullable|boolean',
+
+            /*
+            |--------------------------------------------------------------------------
+            | Profile Photo
+            |--------------------------------------------------------------------------
+            */
+            'profile_photo_temp_id' => [
+                'nullable',
+                'string',
+                'regex:/^tmp_[a-zA-Z0-9]+_[0-9]+$/'
+            ],
+            'remove_profile_photo' => 'nullable|boolean',
+        ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $rawPhotoId = $this->input('profile_photo_temp_id') ?: $this->input('profilePhotoTempId');
+
+        $data = [
+            'profile_photo_temp_id' => $rawPhotoId ?: null,
+            'is_active' => $this->boolean('is_active', true),
+            'remove_profile_photo' => $this->boolean('remove_profile_photo', false),
+        ];
+
+        // Handle empty strings for nullable fields
+        if ($this->has('employee_id') && $this->input('employee_id') === '') {
+            $data['employee_id'] = null;
+        }
+        
+        if ($this->has('last_name') && $this->input('last_name') === '') {
+            $data['last_name'] = null;
+        }
+        
+        if ($this->has('date_of_birth') && $this->input('date_of_birth') === '') {
+            $data['date_of_birth'] = null;
+        }
+        
+        if ($this->has('address') && $this->input('address') === '') {
+            $data['address'] = null;
+        }
+        
+        if ($this->has('reporting_manager_id') && $this->input('reporting_manager_id') === '') {
+            $data['reporting_manager_id'] = null;
+        }
+
+        $this->merge($data);
+    }
+
+    public function messages(): array
+    {
+        return [
+            'employee_id.unique' => 'Employee ID already exists.',
+            'employee_id.regex' => 'Employee ID must contain only uppercase letters, numbers, and hyphens.',
+            'employee_id.max' => 'Employee ID must be at most 191 characters.',
+            
+            'first_name.required' => 'First name is required.',
+            'first_name.max' => 'First name must be at most 191 characters.',
+            
+            'last_name.max' => 'Last name must be at most 191 characters.',
+            
+            'date_of_birth.before_or_equal' => 'Date of birth cannot be in the future.',
+            
+            'gender.in' => 'Invalid gender selection.',
+            
+            'email.required' => 'Email is required.',
+            'email.email' => 'Invalid email format.',
+            'email.unique' => 'Email already exists.',
+            'email.max' => 'Email must be at most 191 characters.',
+            
+            'mobile_number.required' => 'Mobile number is required.',
+            'mobile_number.max' => 'Mobile number must be at most 20 characters.',
+            
+            'address.max' => 'Address must be at most 500 characters.',
+            
+            'designation.required' => 'Designation is required.',
+            'designation.max' => 'Designation must be at most 191 characters.',
+            
+            'department.required' => 'Department is required.',
+            'department.max' => 'Department must be at most 191 characters.',
+            
+            'reporting_manager_id.integer' => 'Invalid reporting manager.',
+            'reporting_manager_id.min' => 'Invalid reporting manager.',
+            'reporting_manager_id.exists' => 'Selected reporting manager does not exist.',
+            
+            'role.in' => 'Invalid role selection.',
+            
+            'profile_photo_temp_id.regex' => 'Invalid photo upload ID.',
+        ];
+    }
+}

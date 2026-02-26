@@ -4,10 +4,12 @@ use App\Http\Controllers\Api\V1\Client\ClientController;
 use App\Http\Controllers\Api\V1\Client\ClientAvailabilityController; // NEW: Add this line
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\DeploymentController;
+use App\Http\Controllers\Api\V1\Employee\EmployeeController;
 use App\Http\Controllers\Api\V1\Quotes\QuoteController;
 use App\Http\Controllers\Api\V1\SignedFileController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\Jobs\JobController;
+use App\Http\Controllers\Api\V1\OptionsController;
 use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -119,6 +121,31 @@ Route::middleware(['jwt.verify'])->group(function () {
                 Route::get('/slots', [ClientAvailabilityController::class, 'getAvailableSlots']);
             });
         });
+
+        // ============================================
+        // EMPLOYEE MANAGEMENT ROUTES
+        // ============================================
+        Route::prefix('employees')->group(function () {
+            // Statistics and hierarchy
+            Route::get('/statistics', [EmployeeController::class, 'getStatistics']);
+            Route::get('/hierarchy', [EmployeeController::class, 'getHierarchy']);
+
+            // CRUD operations
+            Route::get('/', [EmployeeController::class, 'getVendorEmployees']);
+            Route::post('/', [EmployeeController::class, 'addEmployee']);
+            Route::get('/{employeeId}', [EmployeeController::class, 'getVendorEmployee']);
+            Route::put('/{employeeId}', [EmployeeController::class, 'modifyEmployee']);
+            Route::delete('/{employeeId}', [EmployeeController::class, 'removeEmployee']);
+
+            // Optional: Get employees by department/designation
+            Route::get('/department/{department}', [EmployeeController::class, 'getByDepartment']);
+            Route::get('/designation/{designation}', [EmployeeController::class, 'getByDesignation']);
+
+            // Optional: Get subordinates of a manager
+            Route::get('/{employeeId}/subordinates', [EmployeeController::class, 'getSubordinates']);
+            Route::get('/managers/options', [OptionsController::class, 'managers']);
+        });
+
 
         // ============================================
         // QUOTE MANAGEMENT ROUTES

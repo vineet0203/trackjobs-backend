@@ -2,492 +2,143 @@
 
 namespace App\Services\Employee;
 
-use App\Models\Company;
 use App\Models\Employee;
-use App\Models\Role;
-use App\Models\User;
-use App\Services\Audit\AuditLogService;
+use App\Services\File\FileValidationRules;
+use App\Services\File\FileAttachmentService;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
 class EmployeeUpdateService
 {
-    public function __construct() {}
+    public function __construct(
+        private FileAttachmentService $fileAttachmentService
+    ) {}
 
     /**
-     * Update an existing employee with all details
+     * Update an existing employee
      */
-    public function updateEmployee(Employee $employee, array $data, User $updatedBy): array
+    public function update(Employee $employee, array $data, int $updatedBy): Employee
     {
         DB::beginTransaction();
 
         try {
-            $changes = [];
-            $auditChanges = [];
+            Log::info('=== EMPLOYEE UPDATE START ===', [
+                'employee_id' => $employee->id,
+                'data_keys' => array_keys($data),
+                'updated_by' => $updatedBy
+            ]);
 
-            // Step 1: Extract nested data for easier access
-            $personalDetails = $data['personal_details'] ?? [];
-            $jobDetails = $data['job_details'] ?? [];
-            $compensationDetails = $data['compensation_details'] ?? [];
-            $experienceDetails = $data['experience_details'] ?? [];
+            $updateData = [];
 
-            // Step 2: AUDIT LOG - Track email change (User table)
-            if (isset($data['email']) && $data['email'] !== $employee->user->email) {
-                $auditChanges['email'] = [
-                    'old' => $employee->user->email,
-                    'new' => $data['email']
-                ];
-
-                $employee->user->update([
-                    'email' => $data['email'],
-                    'email_verified_at' => null,
-                ]);
-            }
-
-            // Step 3: Prepare employee data for update
-            $employeeData = [];
-            $employeeData['updated_by'] = $updatedBy->id;
-
-            // Direct field updates for specific audit fields
-            $auditFields = ['status', 'manager_id'];
-            $otherFields = [
+            // Allowed fields for update
+            $allowedFields = [
+                'employee_id',
                 'first_name',
                 'last_name',
-                'middle_name',
-                'preferred_name',
-                'phone',
-                'personal_email',
-                'profile_image'
+                'date_of_birth',
+                'gender',
+                'email',
+                'mobile_number',
+                'address',
+                'designation',
+                'department',
+                'reporting_manager_id',
+                'role',
+                'is_active',
+                'profile_photo_temp_id',
+                'remove_profile_photo'
             ];
 
-            // Check and update specific audit fields
-            foreach ($auditFields as $field) {
-                if (array_key_exists($field, $data) && $employee->$field != $data[$field]) {
-                    $employeeData[$field] = $data[$field];
-                    $changes[$field] = [
-                        'old' => $employee->$field,
-                        'new' => $data[$field]
-                    ];
-                    $auditChanges[$field] = [
-                        'old' => $employee->$field,
-                        'new' => $data[$field]
-                    ];
+            foreach ($allowedFields as $field) {
+                if (array_key_exists($field, $data)) {
+                    $updateData[$field] = $data[$field];
                 }
             }
 
-            // Handle status separately if it has additional logic
-            if (isset($data['status'])) {
-                $this->handleStatusChange($employee, $data['status'], $updatedBy);
-            }
-
-            // Check and update other non-audit fields
-            foreach ($otherFields as $field) {
-                if (array_key_exists($field, $data) && $employee->$field != $data[$field]) {
-                    $employeeData[$field] = $data[$field];
-                    $changes[$field] = [
-                        'old' => $employee->$field,
-                        'new' => $data[$field]
-                    ];
-                }
-            }
-
-            // Update employee record if there are changes
-            if (!empty($employeeData)) {
-                $employee->update($employeeData);
-            }
-
-            // Step 4: Update nested details (unchanged)
-            if (!empty($personalDetails)) {
-                $this->updateEmployeePersonalDetails($employee, $personalDetails, $updatedBy);
-            }
-
-            if (!empty($jobDetails)) {
-                $this->updateEmployeeJobDetails($employee, $jobDetails, $updatedBy);
-            }
-
-            if (!empty($compensationDetails)) {
-                $this->updateEmployeeCompensationDetails($employee, $compensationDetails, $updatedBy);
-            }
-
-            if (!empty($experienceDetails)) {
-                $this->updateEmployeeExperienceDetails($employee, $experienceDetails, $updatedBy);
-            }
-
-            if (isset($data['emergency_contacts'])) {
-                $this->updateEmployeeEmergencyContacts($employee, $data, $updatedBy);
-            }
-
-            if (isset($data['legal_documents'])) {
-                $this->updateEmployeeLegalDocuments($employee, $data, $updatedBy);
-            }
-
-            // Step 5: Handle manager reassignment
-            if (isset($data['manager_id'])) {
-                $this->validateManagerAssignment($employee, $data['manager_id']);
-            }
-
-            // Step 6: AUDIT LOG - Log the root-level changes
-            if (!empty($auditChanges)) {
-                AuditLogService::log(
-                    event: 'updated',
-                    entityType: 'employee',
-                    entityId: $employee->id,
-                    oldValues: array_map(fn($change) => $change['old'], $auditChanges),
-                    newValues: array_map(fn($change) => $change['new'], $auditChanges),
-                    meta: [
-                        'updated_by' => $updatedBy->id,
-                        'updated_by_email' => $updatedBy->email,
-                        'employee_id' => $employee->id,
-                        'employee_name' => $employee->full_name,
-                        'change_fields' => array_keys($auditChanges),
-                        'context' => 'employee_update_root_level'
-                    ],
-                    companyId: $employee->company_id,
-                    userId: $updatedBy->id,
-                    context: 'employee_management'
+            // Handle profile photo updates
+            if (isset($updateData['profile_photo_temp_id']) || isset($updateData['remove_profile_photo'])) {
+                $errors = $this->fileAttachmentService->updateFile(
+                    model: $employee,
+                    data: $updateData,
+                    tempIdField: 'profile_photo_temp_id',
+                    pathField: 'profile_photo_path',
+                    destinationPath: 'employees/profile-photos',
+                    allowedMimeTypes: FileValidationRules::getAllowedMimeTypes('images'),
+                    maxSizeKb: FileValidationRules::getSizeLimits('images'),
+                    customFilename: $this->generateProfilePhotoFilename(
+                        $employee->full_name ?: ($updateData['first_name'] ?? $employee->first_name)
+                    ),
+                    keepOriginalName: false,
+                    removeField: 'remove_profile_photo'
                 );
 
-                Log::info('Audit logged for employee update', [
-                    'employee_id' => $employee->id,
-                    'audit_changes' => array_keys($auditChanges),
-                    'updated_by' => $updatedBy->id
-                ]);
+                if (!empty($errors)) {
+                    throw new \Exception(implode(', ', $errors['profile_photo_temp_id'] ?? []));
+                }
             }
 
-            // Step 7: Refresh the employee with all relationships
-            $employee->refresh();
-            $employee->load([
-                'personalDetails',
-                'jobDetails',
-                'compensationDetails',
-                'experienceDetails',
-                'emergencyContacts',
-                'legalDocuments',
-                'user.roles'
-            ]);
+            // Remove temporary fields
+            unset($updateData['profile_photo_temp_id']);
+            unset($updateData['remove_profile_photo']);
+
+            // Add updated_by
+            $updateData['updated_by'] = $updatedBy;
+
+            $employee->update($updateData);
 
             DB::commit();
 
-            Log::info('=== EMPLOYEE UPDATE COMPLETED ===', [
+            $employee->refresh();
+            $employee->load(['reportingManager', 'updater']);
+
+            Log::info('Employee updated successfully', [
                 'employee_id' => $employee->id,
-                'company_id' => $employee->company_id,
-                'all_changes_made' => $changes,
-                'audit_changes' => $auditChanges
+                'updated_fields' => array_keys($updateData),
+                'updated_by' => $updatedBy,
             ]);
 
-            return [
-                'success' => true,
-                'employee' => $employee,
-                'changes' => $changes,
-                'audit_changes' => $auditChanges,
-                'message' => 'Employee updated successfully'
-            ];
+            return $employee;
         } catch (\Exception $e) {
             DB::rollBack();
-            throw new \Exception($e->getMessage());
-        }
-    }
 
-    /**
-     * Update employee personal details
-     */
-    private function updateEmployeePersonalDetails(Employee $employee, array $data, User $updatedBy): void
-    {
-        $personalData = [];
-        $personalFields = [
-            'gender',
-            'birthdate',
-            'marital_status',
-            'nationality',
-            'country',
-            'address',
-            'social_media'
-        ];
-
-        foreach ($personalFields as $field) {
-            if (array_key_exists($field, $data)) {
-                $personalData[$field] = $data[$field];
-            }
-        }
-
-        if (!empty($personalData)) {
-            $personalData['updated_by'] = $updatedBy->id;
-
-            if ($employee->personalDetails) {
-                $employee->personalDetails->update($personalData);
-            } else {
-                $personalData['employee_id'] = $employee->id;
-                $personalData['created_by'] = $updatedBy->id;
-                $employee->personalDetails()->create($personalData);
+            // Cleanup temporary upload if update failed
+            if (isset($data['profile_photo_temp_id'])) {
+                $this->fileAttachmentService->cleanupUnusedTemporaryUpload($data['profile_photo_temp_id']);
             }
 
-            Log::info('✅ Personal details updated', ['employee_id' => $employee->id]);
-        }
-    }
-
-    /**
-     * Update employee job details
-     */
-    private function updateEmployeeJobDetails(Employee $employee, array $data, User $updatedBy): void
-    {
-        $jobData = [];
-        $jobFields = [
-            'job_title',
-            'department',
-            'division',
-            'employment_type',
-            'workplace',
-            'work_location',
-            'start_date',
-            'effective_date',
-            'work_schedule'
-        ];
-
-        foreach ($jobFields as $field) {
-            if (array_key_exists($field, $data)) {
-                $jobData[$field] = $data[$field];
-            }
-        }
-
-        if (!empty($jobData)) {
-            $jobData['updated_by'] = $updatedBy->id;
-
-            if ($employee->jobDetails) {
-                $employee->jobDetails->update($jobData);
-            } else {
-                $jobData['employee_id'] = $employee->id;
-                $jobData['created_by'] = $updatedBy->id;
-                $employee->jobDetails()->create($jobData);
-            }
-
-            Log::info('✅ Job details updated', ['employee_id' => $employee->id]);
-        }
-    }
-
-    /**
-     * Update employee compensation details
-     */
-    private function updateEmployeeCompensationDetails(Employee $employee, array $data, User $updatedBy): void
-    {
-        $compensationData = [];
-        $compensationFields = [
-            'salary',
-            'currency',
-            'pay_frequency',
-            'bank_name',
-            'account_number',
-            'iban',
-            'tax_id'
-        ];
-
-        foreach ($compensationFields as $field) {
-            if (array_key_exists($field, $data)) {
-                $compensationData[$field] = $data[$field];
-            }
-        }
-
-        if (!empty($compensationData)) {
-            $compensationData['updated_by'] = $updatedBy->id;
-
-            if ($employee->compensationDetails) {
-                $employee->compensationDetails->update($compensationData);
-            } else {
-                $compensationData['employee_id'] = $employee->id;
-                $compensationData['created_by'] = $updatedBy->id;
-                $employee->compensationDetails()->create($compensationData);
-            }
-
-            Log::info('✅ Compensation details updated', ['employee_id' => $employee->id]);
-        }
-    }
-
-    /**
-     * Update employee experience details
-     */
-    private function updateEmployeeExperienceDetails(Employee $employee, array $data, User $updatedBy): void
-    {
-        $experienceData = [];
-        $experienceFields = [
-            'education',
-            'work_experience',
-            'skills',
-            'languages',
-            'certifications',
-            'resume'
-        ];
-
-        foreach ($experienceFields as $field) {
-            if (array_key_exists($field, $data)) {
-                $experienceData[$field] = $data[$field];
-            }
-        }
-
-        if (!empty($experienceData)) {
-            $experienceData['updated_by'] = $updatedBy->id;
-
-            if ($employee->experienceDetails) {
-                $employee->experienceDetails->update($experienceData);
-            } else {
-                $experienceData['employee_id'] = $employee->id;
-                $experienceData['created_by'] = $updatedBy->id;
-                $employee->experienceDetails()->create($experienceData);
-            }
-
-            Log::info('✅ Experience details updated', ['employee_id' => $employee->id]);
-        }
-    }
-
-    /**
-     * Update employee emergency contacts
-     */
-    private function updateEmployeeEmergencyContacts(Employee $employee, array $data, User $updatedBy): void
-    {
-        if (!empty($data['emergency_contacts'])) {
-            // Delete existing emergency contacts
-            $employee->emergencyContacts()->delete();
-
-            // Create new emergency contacts
-            foreach ($data['emergency_contacts'] as $contact) {
-                $employee->emergencyContacts()->create([
-                    'employee_id' => $employee->id,
-                    'contact_name' => $contact['contact_name'],
-                    'contact_phone' => $contact['contact_phone'],
-                    'relationship' => $contact['relationship'],
-                    'address' => $contact['address'] ?? null,
-                    'is_primary' => $contact['is_primary'] ?? false,
-                    'created_by' => $updatedBy->id,
-                    'updated_by' => $updatedBy->id
-                ]);
-            }
-
-            Log::info('✅ Emergency contacts updated', [
+            Log::error('Failed to update employee', [
                 'employee_id' => $employee->id,
-                'count' => count($data['emergency_contacts'])
+                'error' => $e->getMessage(),
+                'updated_by' => $updatedBy,
             ]);
+            throw $e;
         }
     }
 
     /**
-     * Update employee legal documents
+     * Update employee status
      */
-    private function updateEmployeeLegalDocuments(Employee $employee, array $data, User $updatedBy): void
+    public function updateStatus(Employee $employee, bool $isActive, int $updatedBy): Employee
     {
-        if (!empty($data['legal_documents'])) {
-            // For simplicity, we'll delete and recreate
-            // In production, you might want more sophisticated document management
-            $employee->legalDocuments()->delete();
-
-            foreach ($data['legal_documents'] as $document) {
-                $employee->legalDocuments()->create([
-                    'employee_id' => $employee->id,
-                    'document_type' => $document['document_type'],
-                    'document_name' => $document['document_name'],
-                    'document_path' => $document['document_path'],
-                    'issue_date' => $document['issue_date'] ?? null,
-                    'expiry_date' => $document['expiry_date'] ?? null,
-                    'notes' => $document['notes'] ?? null,
-                    'is_verified' => $document['is_verified'] ?? false,
-                    'created_by' => $updatedBy->id,
-                    'updated_by' => $updatedBy->id
-                ]);
-            }
-
-            Log::info('✅ Legal documents updated', [
-                'employee_id' => $employee->id,
-                'count' => count($data['legal_documents'])
-            ]);
-        }
+        return $this->update($employee, ['is_active' => $isActive], $updatedBy);
     }
 
     /**
-     * Handle employee status change
+     * Update reporting manager
      */
-    private function handleStatusChange(Employee $employee, string $newStatus, User $updatedBy): void
+    public function updateReportingManager(Employee $employee, ?int $managerId, int $updatedBy): Employee
     {
-        $oldStatus = $employee->status;
-
-        switch ($newStatus) {
-            case 'inactive':
-                // Deactivate user account
-                $employee->user->update([
-                    'is_active' => false,
-                    'updated_by' => $updatedBy->id
-                ]);
-                Log::info('Employee deactivated', ['employee_id' => $employee->id]);
-                break;
-
-            case 'active':
-                // Reactivate user account
-                $employee->user->update([
-                    'is_active' => true,
-                    'updated_by' => $updatedBy->id
-                ]);
-                Log::info('Employee reactivated', ['employee_id' => $employee->id]);
-                break;
-
-            default:
-                Log::warning('Unknown status change attempted', [
-                    'employee_id' => $employee->id,
-                    'attempted_status' => $newStatus
-                ]);
-                break;
-        }
+        return $this->update($employee, ['reporting_manager_id' => $managerId], $updatedBy);
     }
 
     /**
-     * Validate manager assignment
+     * Generate profile photo filename
      */
-    private function validateManagerAssignment(Employee $employee, ?int $managerId): void
+    private function generateProfilePhotoFilename(string $employeeName): string
     {
-        if ($managerId === null) {
-            return; // Removing manager is allowed
-        }
-
-        // Check if manager exists and belongs to same company
-        $manager = Employee::where('id', $managerId)
-            ->where('company_id', $employee->company_id)
-            ->first();
-
-        if (!$manager) {
-            throw new \Exception('Manager not found or belongs to different company');
-        }
-
-        // Prevent circular reference (employee cannot be their own manager)
-        if ($managerId === $employee->id) {
-            throw new \Exception('Employee cannot be their own manager');
-        }
-
-        // Prevent manager chain loops
-        if ($this->wouldCreateCircularReference($employee, $managerId)) {
-            throw new \Exception(
-                'an employee cannot be assigned as a manager if they already report (directly or indirectly) to the same person.'
-            );
-        }
-    }
-
-    /**
-     * Check for circular reference in manager hierarchy
-     */
-    private function wouldCreateCircularReference(Employee $employee, int $managerId): bool
-    {
-        $currentManagerId = $managerId;
-
-        // Traverse up the management chain
-        while ($currentManagerId !== null) {
-            if ($currentManagerId === $employee->id) {
-                return true; // Circular reference found
-            }
-
-            $currentManager = Employee::find($currentManagerId);
-            if (!$currentManager) {
-                break;
-            }
-
-            $currentManagerId = $currentManager->manager_id;
-        }
-
-        return false;
+        $slug = \Illuminate\Support\Str::slug($employeeName);
+        $timestamp = time();
+        $random = \Illuminate\Support\Str::random(6);
+        return "profile_{$slug}_{$random}_{$timestamp}.jpg";
     }
 }

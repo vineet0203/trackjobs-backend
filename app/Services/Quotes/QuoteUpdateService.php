@@ -27,6 +27,7 @@ class QuoteUpdateService
                 'title',
                 'client_id',
                 'equity_status',
+                'quote_due_date',
                 'currency',
                 'discount',
                 'deposit_required',

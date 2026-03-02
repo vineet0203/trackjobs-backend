@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,4 +20,12 @@ Route::get('/', function () {
         'message' => 'TrakJobs API is running 🚀'
     ]);
     //return view('welcome');
+});
+
+Route::get('/test-mail', function () {
+    Mail::raw('This is a test email from TrackJobs.', function ($message) {
+        $message->to('trackjobsofficial@gmail.com')
+                ->subject('TrackJobs SMTP Test');
+    });
+    return 'Mail Sent Successfully';
 });

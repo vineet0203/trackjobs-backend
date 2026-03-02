@@ -18,6 +18,7 @@ class Quote extends BaseModel
         'client_name',
         'client_email',
         'equity_status',
+        'quote_due_date',
         'currency',
         'subtotal',
         'discount',
@@ -61,6 +62,7 @@ class Quote extends BaseModel
         'follow_up_at' => 'datetime',
         'expires_at' => 'datetime',
         'converted_at' => 'datetime',
+        'quote_due_date' => 'date',
     ];
 
 

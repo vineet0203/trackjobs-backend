@@ -43,6 +43,7 @@ class QuoteCreationService
                 'client_name' => $this->getClientDisplayName($client),
                 'client_email' => $client->email,
                 'equity_status' => $data['equity_status'] ?? 'not_applicable',
+                'quote_due_date' => $data['quote_due_date'] ?? null,
                 'currency' => $data['currency'] ?? 'USD',
                 'subtotal' => 0,
                 'discount' => $data['discount'] ?? 0,

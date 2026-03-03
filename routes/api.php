@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\SignedFileController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\Jobs\JobController;
 use App\Http\Controllers\Api\V1\OptionsController;
+use App\Http\Controllers\Api\V1\Onboarding\OnboardingController;
 use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -214,6 +215,16 @@ Route::middleware(['jwt.verify'])->group(function () {
         Route::post('/temp', [UploadController::class, 'uploadTemporary']);
         Route::get('/limits', [UploadController::class, 'getUploadLimits']);
     });
+
+    // ============================================
+    // ONBOARDING MANAGEMENT ROUTES (PROTECTED)
+    // ============================================
+    Route::prefix('onboarding')->group(function () {
+        Route::get('/templates', [OnboardingController::class, 'templates']);
+        Route::post('/assign', [OnboardingController::class, 'assign']);
+        Route::get('/assigned', [OnboardingController::class, 'listAssigned']);
+        Route::get('/download/{id}', [OnboardingController::class, 'download']);
+    });
 });
 
 // ============================================
@@ -223,6 +234,14 @@ Route::prefix('files')->group(function () {
     // Serve signed files (no auth required - URL itself is the auth)
     Route::get('/signed/{signature}', [SignedFileController::class, 'serveSigned'])
         ->name('api.v1.files.signed');
+});
+
+// ============================================
+// ONBOARDING PUBLIC ROUTES (TOKEN-BASED, NO AUTH)
+// ============================================
+Route::prefix('onboarding')->group(function () {
+    Route::get('/{token}', [OnboardingController::class, 'getByToken']);
+    Route::post('/{token}/submit', [OnboardingController::class, 'submit']);
 });
 
 // ============================================

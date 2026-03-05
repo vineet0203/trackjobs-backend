@@ -210,20 +210,49 @@ class OnboardingController extends BaseController
     public function download(int $id)
     {
         try {
+            // Step 1: Find the assignment (without firstOrFail to give better errors)
             $assignment = AssignedDocument::where('id', $id)
                 ->where('vendor_id', auth()->id())
-                ->where('status', 'completed')
-                ->firstOrFail();
+                ->first();
 
-            if (!$assignment->completed_pdf_path || !Storage::exists($assignment->completed_pdf_path)) {
-                return $this->errorResponse('Completed PDF not found.', 404);
+            if (!$assignment) {
+                Log::warning('Download failed: assignment not found or not owned by vendor', [
+                    'id' => $id,
+                    'vendor_id' => auth()->id(),
+                ]);
+                return $this->errorResponse('Document not found or access denied.', 404);
+            }
+
+            if ($assignment->status !== 'completed') {
+                Log::warning('Download failed: assignment not completed', [
+                    'id' => $id,
+                    'status' => $assignment->status,
+                ]);
+                return $this->errorResponse('Document has not been completed yet.', 400);
+            }
+
+            if (!$assignment->completed_pdf_path) {
+                Log::error('Download failed: completed_pdf_path is null', [
+                    'id' => $id,
+                    'status' => $assignment->status,
+                ]);
+                return $this->errorResponse('Completed PDF path not recorded.', 404);
+            }
+
+            if (!Storage::exists($assignment->completed_pdf_path)) {
+                Log::error('Download failed: file does not exist on disk', [
+                    'id' => $id,
+                    'path' => $assignment->completed_pdf_path,
+                    'full_path' => storage_path('app/' . $assignment->completed_pdf_path),
+                ]);
+                return $this->errorResponse('Completed PDF file not found on server. Path: ' . $assignment->completed_pdf_path, 404);
             }
 
             $downloadName = Str::slug($assignment->employee_name) . '_' . Str::slug($assignment->template->name ?? 'document') . '.pdf';
 
             return Storage::download($assignment->completed_pdf_path, $downloadName);
         } catch (\Exception $e) {
-            Log::error('Failed to download completed PDF', ['id' => $id, 'error' => $e->getMessage()]);
+            Log::error('Failed to download completed PDF', ['id' => $id, 'error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             return $this->errorResponse('Failed to download document.', 500);
         }
     }

@@ -190,6 +190,10 @@ class DeploymentController extends Controller
             }
             $output[] = 'Migrations: ' . Artisan::output();
 
+            // 4b. Run essential seeders (idempotent - uses firstOrCreate)
+            Artisan::call('db:seed', ['--class' => 'DocumentTemplateSeeder', '--force' => true]);
+            $output[] = 'Seeders: ' . Artisan::output();
+
             // 5. Clear caches
             Artisan::call('cache:clear');
             Artisan::call('route:clear');

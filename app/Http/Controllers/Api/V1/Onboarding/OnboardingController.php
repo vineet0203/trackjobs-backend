@@ -227,4 +227,46 @@ class OnboardingController extends BaseController
             return $this->errorResponse('Failed to download document.', 500);
         }
     }
+
+    /**
+     * Serve the blank template PDF for a given assignment token (PUBLIC).
+     * The employee needs this to fill the form in the browser.
+     */
+    public function templatePdf(string $token)
+    {
+        try {
+            $assignment = AssignedDocument::with('template')
+                ->where('token', $token)
+                ->first();
+
+            if (!$assignment) {
+                return $this->errorResponse('Invalid link.', 404);
+            }
+
+            if ($assignment->status === 'completed') {
+                return $this->errorResponse('This form has already been completed.', 410);
+            }
+
+            if ($assignment->isExpired()) {
+                return $this->errorResponse('This link has expired.', 410);
+            }
+
+            $fileName = $assignment->template->file_name;
+            $path = 'document-templates/' . $fileName;
+
+            if (!Storage::exists($path)) {
+                Log::error('Template PDF not found on disk', ['path' => $path]);
+                return $this->errorResponse('Template PDF not found.', 404);
+            }
+
+            return response(Storage::get($path), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $fileName . '"',
+                'Cache-Control' => 'public, max-age=3600',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to serve template PDF', ['token' => $token, 'error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to load template.', 500);
+        }
+    }
 }

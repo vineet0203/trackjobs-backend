@@ -242,6 +242,7 @@ Route::prefix('files')->group(function () {
 Route::prefix('onboarding')->group(function () {
     Route::get('/{token}', [OnboardingController::class, 'getByToken']);
     Route::post('/{token}/submit', [OnboardingController::class, 'submit']);
+    Route::get('/{token}/template-pdf', [OnboardingController::class, 'templatePdf']);
 });
 
 // ============================================

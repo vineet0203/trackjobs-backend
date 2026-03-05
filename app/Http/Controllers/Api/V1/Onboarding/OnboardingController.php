@@ -145,9 +145,37 @@ class OnboardingController extends BaseController
                 return $this->errorResponse('This link has expired.', 410);
             }
 
+            // Ensure the storage directory exists
+            $storagePath = storage_path('app/completed-documents');
+            if (!is_dir($storagePath)) {
+                mkdir($storagePath, 0775, true);
+            }
+
             // Store the completed PDF
             $fileName = 'completed_' . $assignment->id . '_' . time() . '.pdf';
-            $path = $request->file('completed_pdf')->storeAs('completed-documents', $fileName);
+            $uploadedFile = $request->file('completed_pdf');
+
+            Log::info('Upload file details', [
+                'original_name' => $uploadedFile->getClientOriginalName(),
+                'size' => $uploadedFile->getSize(),
+                'mime' => $uploadedFile->getMimeType(),
+                'valid' => $uploadedFile->isValid(),
+                'error' => $uploadedFile->getError(),
+            ]);
+
+            $path = $uploadedFile->storeAs('completed-documents', $fileName);
+
+            if ($path === false) {
+                Log::error('storeAs() returned false — PDF file could not be saved', [
+                    'assignment_id' => $assignment->id,
+                    'target_dir' => $storagePath,
+                    'file_name' => $fileName,
+                    'dir_exists' => is_dir($storagePath),
+                    'dir_writable' => is_writable($storagePath),
+                    'disk_free' => disk_free_space(storage_path('app')),
+                ]);
+                return $this->errorResponse('Failed to save the PDF file. Please try again.', 500);
+            }
 
             // Update assignment
             $assignment->update([

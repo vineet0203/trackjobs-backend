@@ -319,7 +319,10 @@ class OnboardingController extends BaseController
             return response(Storage::get($path), 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Disposition' => 'inline; filename="' . $fileName . '"',
-                'Cache-Control' => 'public, max-age=3600',
+                // Prevent stale template PDFs from browser/proxy cache.
+                'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma' => 'no-cache',
+                'Expires' => '0',
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to serve template PDF', ['token' => $token, 'error' => $e->getMessage()]);

@@ -47,6 +47,19 @@ class JobResource extends JsonResource
             'assigned_to' => $this->whenLoaded('assignedTo', function () {
                 return new UserResource($this->assignedTo);
             }),
+            'latest_assignment' => $this->whenLoaded('assignments', function () {
+                $latest = $this->assignments->sortByDesc('created_at')->first();
+                if ($latest && $latest->relationLoaded('employee') && $latest->employee) {
+                    return [
+                        'id' => $latest->id,
+                        'employee_id' => $latest->employee->id,
+                        'employee_name' => trim($latest->employee->first_name . ' ' . $latest->employee->last_name),
+                        'shift' => $latest->shift,
+                        'assigned_at' => $latest->assigned_at?->format('M d, Y H:i'),
+                    ];
+                }
+                return null;
+            }),
             'created_by' => $this->whenLoaded('createdBy', function () {
                 return new UserResource($this->createdBy);
             }),

@@ -22,8 +22,12 @@ use App\Services\Jobs\JobDeletionService;
 use App\Services\Jobs\JobTaskService;
 use App\Services\Jobs\JobAttachmentService;
 use App\Services\Jobs\JobUpdateService;
+use App\Models\JobAssignment;
+use App\Models\Employee;
+use App\Models\JobActivity;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class JobController extends BaseController
@@ -854,6 +858,70 @@ class JobController extends BaseController
 
             return $this->errorResponse(
                 'Failed to retrieve job statistics.',
+                500
+            );
+        }
+    }
+
+    /**
+     * Assign a job to an employee
+     */
+    public function assignJob(Request $request, $id): JsonResponse
+    {
+        try {
+            $request->validate([
+                'employee_id' => 'required|exists:employees,id',
+                'shift' => 'required|string|max:50',
+            ]);
+
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            $job = \App\Models\Job::where('id', $id)
+                ->where('vendor_id', $vendorId)
+                ->firstOrFail();
+
+            $employee = Employee::where('id', $request->employee_id)
+                ->where('vendor_id', $vendorId)
+                ->firstOrFail();
+
+            $assignment = JobAssignment::create([
+                'job_id' => $job->id,
+                'employee_id' => $employee->id,
+                'shift' => $request->shift,
+                'assigned_at' => now(),
+            ]);
+
+            // Log activity
+            JobActivity::create([
+                'job_id' => $job->id,
+                'type' => 'assignment',
+                'subject' => 'Job Assigned',
+                'content' => "Job {$job->job_number} assigned to {$employee->first_name} {$employee->last_name} ({$request->shift} shift)",
+                'metadata' => [
+                    'employee_id' => $employee->id,
+                    'employee_name' => "{$employee->first_name} {$employee->last_name}",
+                    'shift' => $request->shift,
+                ],
+                'performed_by' => $user->id,
+            ]);
+
+            return $this->successResponse(
+                $assignment->load('employee'),
+                'Job assigned successfully.'
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->errorResponse($e->getMessage(), 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->errorResponse('Job or employee not found.', 404);
+        } catch (\Exception $e) {
+            Log::error('Failed to assign job', [
+                'job_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return $this->errorResponse(
+                'Failed to assign job. Please try again.',
                 500
             );
         }

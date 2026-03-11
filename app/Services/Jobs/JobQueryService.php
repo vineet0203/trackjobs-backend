@@ -20,6 +20,7 @@ class JobQueryService
             'attachments',
             'activities',
             'assignedTo',
+            'assignments.employee',
             'createdBy',
             'updatedBy'
         ]);
@@ -85,7 +86,7 @@ class JobQueryService
     /**
      * Get single work order by ID
      */
-    public function getJob(int $id, array $with = ['client', 'quote', 'tasks', 'activities', 'assignedTo', 'createdBy', 'updatedBy'])
+    public function getJob(int $id, array $with = ['client', 'quote', 'tasks', 'activities', 'assignedTo', 'assignments.employee', 'createdBy', 'updatedBy'])
     {
         $vendorId = auth()->user()->vendor_id;
 
@@ -106,7 +107,7 @@ class JobQueryService
     /**
      * Get work order by work order number
      */
-    public function getJobByNumber(string $jobNumber, array $with = ['client', 'tasks', 'attachments', 'activities', 'assignedTo', 'createdBy', 'updatedBy'])
+    public function getJobByNumber(string $jobNumber, array $with = ['client', 'tasks', 'attachments', 'activities', 'assignedTo', 'assignments.employee', 'createdBy', 'updatedBy'])
     {
         $vendorId = auth()->user()->vendor_id;
 

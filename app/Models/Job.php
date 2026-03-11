@@ -207,6 +207,16 @@ class Job extends BaseModel
         return $this->hasMany(JobTimeline::class)->latest();
     }
 
+    public function assignments()
+    {
+        return $this->hasMany(JobAssignment::class);
+    }
+
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
     /**
      * Scopes
      */

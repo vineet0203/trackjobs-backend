@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\Quotes\QuoteController;
 use App\Http\Controllers\Api\V1\SignedFileController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\Jobs\JobController;
+use App\Http\Controllers\Api\V1\Schedule\ScheduleController;
 use App\Http\Controllers\Api\V1\OptionsController;
 use App\Http\Controllers\Api\V1\Onboarding\OnboardingController;
 use App\Services\RequestAnalyticsService;
@@ -192,6 +193,20 @@ Route::middleware(['jwt.verify'])->group(function () {
             // Attachment management
             Route::post('/{id}/attachments', [JobController::class, 'addAttachment']);
             Route::delete('/{id}/attachments/{attachmentId}', [JobController::class, 'deleteAttachment']);
+
+            // Job assignment
+            Route::post('/{id}/assign', [JobController::class, 'assignJob']);
+        });
+
+        // ============================================
+        // SCHEDULE MANAGEMENT ROUTES
+        // ============================================
+        Route::prefix('schedules')->group(function () {
+            Route::get('/', [ScheduleController::class, 'index']);
+            Route::post('/', [ScheduleController::class, 'store']);
+            Route::get('/{id}', [ScheduleController::class, 'show']);
+            Route::put('/{id}', [ScheduleController::class, 'update']);
+            Route::delete('/{id}', [ScheduleController::class, 'destroy']);
         });
 
         // ============================================

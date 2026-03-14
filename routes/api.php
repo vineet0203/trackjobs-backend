@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Client\ClientAvailabilityController; // NEW: Add
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\DeploymentController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
+use App\Http\Controllers\Api\V1\Dispatch\ScheduleDispatchController;
 use App\Http\Controllers\Api\V1\Quotes\QuoteController;
 use App\Http\Controllers\Api\V1\SignedFileController;
 use App\Http\Controllers\Api\V1\UploadController;
@@ -71,6 +72,18 @@ Route::prefix('auth')->group(function () {
 // PROTECTED ROUTES - REQUIRE AUTHENTICATION
 // ============================================
 Route::middleware(['jwt.verify'])->group(function () {
+
+    // ============================================
+    // SCHEDULE & DISPATCH ROUTES
+    // ============================================
+    Route::prefix('schedules')->group(function () {
+        Route::get('/', [ScheduleDispatchController::class, 'index']);
+        Route::post('/', [ScheduleDispatchController::class, 'store']);
+        Route::get('/upcoming', [ScheduleDispatchController::class, 'upcoming']);
+        Route::get('/crews', [ScheduleDispatchController::class, 'crews']);
+        Route::put('/{id}', [ScheduleDispatchController::class, 'update']);
+        Route::delete('/{id}', [ScheduleDispatchController::class, 'destroy']);
+    });
 
     // ============================================
     // AUTH & PROFILE ROUTES

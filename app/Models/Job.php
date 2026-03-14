@@ -217,6 +217,11 @@ class Job extends BaseModel
         return $this->hasMany(Schedule::class);
     }
 
+    public function dispatchSchedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
     /**
      * Scopes
      */

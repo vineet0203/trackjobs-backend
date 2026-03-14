@@ -81,6 +81,16 @@ class Employee extends BaseModel
         return $this->belongsTo(User::class, 'updated_by');
     }
 
+    public function crewMemberships(): HasMany
+    {
+        return $this->hasMany(CrewMember::class);
+    }
+
+    public function assignedSchedules(): HasMany
+    {
+        return $this->hasMany(Schedule::class, 'employee_id');
+    }
+
     /**
      * Get full name attribute
      */

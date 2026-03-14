@@ -31,8 +31,21 @@ class EmployeeDeletionService
                 throw new \Exception('Cannot delete employee with active subordinates. Please reassign them first.');
             }
 
-            // Update deleted_by
+            // Free unique keys before soft delete so the same employee_id/email can be reused.
+            // The employees table currently has global unique indexes on employee_id and email.
+            $suffix = '__deleted_' . now()->timestamp . '_' . $employee->id;
+
+            if (!empty($employee->employee_id)) {
+                $employee->employee_id = $employee->employee_id . $suffix;
+            }
+
+            if (!empty($employee->email)) {
+                $employee->email = 'deleted+' . $employee->id . '+' . now()->timestamp . '@trakjobs.local';
+            }
+
+            // Update audit fields
             $employee->deleted_by = $deletedBy;
+            $employee->updated_by = $deletedBy;
             $employee->save();
 
             // Soft delete the employee

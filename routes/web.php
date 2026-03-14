@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ScheduleDispatchDashboardController;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 
@@ -29,3 +30,6 @@ Route::get('/test-mail', function () {
     });
     return 'Mail Sent Successfully';
 });
+
+Route::get('/schedule-dispatch', ScheduleDispatchDashboardController::class)
+    ->name('schedule-dispatch.dashboard');

@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\Client\ClientController;
 use App\Http\Controllers\Api\V1\Client\ClientAvailabilityController; // NEW: Add this line
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\Booking\BookingController;
+use App\Http\Controllers\Api\V1\Booking\OnlineBookingOptionsController;
 use App\Http\Controllers\Api\V1\DeploymentController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeController;
 use App\Http\Controllers\Api\V1\Dispatch\ScheduleDispatchController;
@@ -72,6 +74,15 @@ Route::prefix('auth')->group(function () {
 // PROTECTED ROUTES - REQUIRE AUTHENTICATION
 // ============================================
 Route::middleware(['jwt.verify'])->group(function () {
+
+    Route::post('/bookings', [BookingController::class, 'store']);
+
+    Route::prefix('online-booking')->group(function () {
+        Route::get('/categories', [OnlineBookingOptionsController::class, 'categories']);
+        Route::get('/customers', [OnlineBookingOptionsController::class, 'customers']);
+        Route::get('/employees', [OnlineBookingOptionsController::class, 'employees']);
+        Route::get('/locations', [OnlineBookingOptionsController::class, 'locations']);
+    });
 
     // ============================================
     // SCHEDULE & DISPATCH ROUTES

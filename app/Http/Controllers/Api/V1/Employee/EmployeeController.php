@@ -17,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
 class EmployeeController extends BaseController
@@ -75,22 +76,39 @@ class EmployeeController extends BaseController
             $employeeAppUrl = rtrim(env('EMPLOYEE_FRONTEND_URL', 'http://localhost:5174'), '/');
             $setupLink = $employeeAppUrl . '/set-password?email=' . urlencode($employee->email) . '&token=' . urlencode($plainToken);
 
+            $emailSent = true;
+            $emailError = null;
+
+            try {
+                Mail::send('emails.reset_password', [
+                    'name' => trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? '')) ?: ($employee->name ?? 'Employee'),
+                    'resetUrl' => $setupLink,
+                ], function ($message) use ($employee) {
+                    $message->to($employee->email)
+                        ->subject('Set your password - ' . config('app.name', 'TrackJobs'));
+                });
+            } catch (\Throwable $mailException) {
+                $emailSent = false;
+                $emailError = $mailException->getMessage();
+            }
+
             Log::info('Employee first-time password setup link generated.', [
                 'employee_id' => $employee->id,
                 'email' => $employee->email,
-                'setup_link' => $setupLink,
+                'email_sent' => $emailSent,
+                'mail_error' => $emailError,
             ]);
 
             return $this->createdResponse(
                 new EmployeeResource($employee),
-                'Employee added successfully.',
+                $emailSent
+                    ? 'Employee added successfully. Password setup email sent.'
+                    : 'Employee added successfully, but password setup email could not be sent.',
                 [
                     'password_setup' => [
                         'email' => $employee->email,
-                        'setup_url' => $setupLink,
-                        // Fallback for local/dev when email service is not configured.
-                        'token' => $plainToken,
                         'expires_in_minutes' => 60,
+                        'email_sent' => $emailSent,
                     ],
                 ]
             );

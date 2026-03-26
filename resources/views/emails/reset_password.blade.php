@@ -18,9 +18,7 @@
           <!-- Header -->
           <tr>
             <td align="center" style="padding:20px; background-color:#0f766e;">
-              <img src="https://res.cloudinary.com/dwi5dlj62/image/upload/v1756741894/hustoro_logo_white_dxorts.png"
-                alt="{{ config('app.name') }} Logo"
-                style="max-height:40px; display:block;">
+              <span style="display:inline-block; font-size:28px; line-height:1; font-weight:700; color:#ffffff; letter-spacing:0.5px;">TrackJobs</span>
             </td>
           </tr>
 

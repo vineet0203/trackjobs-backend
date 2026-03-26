@@ -23,15 +23,6 @@ class CreateEmployeeRequest extends FormRequest
             | Basic Information
             |--------------------------------------------------------------------------
             */
-            'employee_id' => [
-                'nullable', // Changed from 'required' to 'nullable'
-                'string',
-                'max:191',
-                'regex:/^[A-Z0-9-]+$/',
-                Rule::unique('employees')->where(
-                    fn($q) => $q->where('vendor_id', $vendorId)
-                ),
-            ],
             'first_name' => 'required|string|max:191',
             'last_name' => 'nullable|string|max:191',
             'date_of_birth' => 'nullable|date|before_or_equal:today',
@@ -97,10 +88,6 @@ class CreateEmployeeRequest extends FormRequest
         ];
 
         // Handle empty strings for nullable fields
-        if ($this->has('employee_id') && $this->input('employee_id') === '') {
-            $data['employee_id'] = null;
-        }
-        
         if ($this->has('last_name') && $this->input('last_name') === '') {
             $data['last_name'] = null;
         }
@@ -123,10 +110,6 @@ class CreateEmployeeRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'employee_id.unique' => 'Employee ID already exists.',
-            'employee_id.regex' => 'Employee ID must contain only uppercase letters, numbers, and hyphens.',
-            'employee_id.max' => 'Employee ID must be at most 191 characters.',
-            
             'first_name.required' => 'First name is required.',
             'first_name.max' => 'First name must be at most 191 characters.',
             

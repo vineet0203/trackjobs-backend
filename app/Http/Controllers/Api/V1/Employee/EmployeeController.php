@@ -15,6 +15,9 @@ use App\Services\Employee\EmployeeDeletionService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class EmployeeController extends BaseController
 {
@@ -54,13 +57,42 @@ class EmployeeController extends BaseController
             }
 
             $validatedData = $request->validated();
+            unset($validatedData['employee_id']);
             $validatedData['vendor_id'] = $vendorId;
 
             $employee = $this->employeeCreationService->create($validatedData, auth()->id());
 
+            $plainToken = Str::random(60);
+
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $employee->email],
+                [
+                    'token' => Hash::make($plainToken),
+                    'created_at' => now(),
+                ]
+            );
+
+            $employeeAppUrl = rtrim(env('EMPLOYEE_FRONTEND_URL', 'http://localhost:5174'), '/');
+            $setupLink = $employeeAppUrl . '/set-password?email=' . urlencode($employee->email) . '&token=' . urlencode($plainToken);
+
+            Log::info('Employee first-time password setup link generated.', [
+                'employee_id' => $employee->id,
+                'email' => $employee->email,
+                'setup_link' => $setupLink,
+            ]);
+
             return $this->createdResponse(
                 new EmployeeResource($employee),
-                'Employee added successfully.'
+                'Employee added successfully.',
+                [
+                    'password_setup' => [
+                        'email' => $employee->email,
+                        'setup_url' => $setupLink,
+                        // Fallback for local/dev when email service is not configured.
+                        'token' => $plainToken,
+                        'expires_in_minutes' => 60,
+                    ],
+                ]
             );
         } catch (\Exception $e) {
             Log::error('Failed to add employee', [

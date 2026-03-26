@@ -7,6 +7,7 @@ use App\Services\File\FileValidationRules;
 use App\Services\File\FileAttachmentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Database\QueryException;
 
 class EmployeeCreationService
 {
@@ -28,11 +29,9 @@ class EmployeeCreationService
                 'created_by' => $createdBy
             ]);
 
-            // Auto-generate employee_id if not provided
-            if (empty($data['employee_id'])) {
-                $data['employee_id'] = $this->generateEmployeeId($data['vendor_id']);
-                Log::info('Auto-generated employee_id', ['employee_id' => $data['employee_id']]);
-            }
+            // Always generate employee_id on the server to avoid request collisions.
+            $data['employee_id'] = $this->generateEmployeeId();
+            Log::info('Auto-generated employee_id', ['employee_id' => $data['employee_id']]);
 
             $createData = [
                 'vendor_id' => $data['vendor_id'],
@@ -42,6 +41,7 @@ class EmployeeCreationService
                 'date_of_birth' => $data['date_of_birth'] ?? null,
                 'gender' => $data['gender'] ?? null,
                 'email' => $data['email'],
+                'password' => null,
                 'mobile_number' => $data['mobile_number'],
                 'address' => $data['address'] ?? null,
                 'designation' => $data['designation'],
@@ -82,7 +82,31 @@ class EmployeeCreationService
             // Remove temporary fields
             unset($createData['profile_photo_temp_id']);
 
-            $employee = Employee::create($createData);
+            $employee = null;
+
+            // Protect against race conditions in high concurrency environments.
+            for ($attempt = 1; $attempt <= 5; $attempt++) {
+                try {
+                    $createData['employee_id'] = $this->generateEmployeeId();
+                    $employee = Employee::create($createData);
+                    break;
+                } catch (QueryException $e) {
+                    $isDuplicateEmployeeId = str_contains(strtolower($e->getMessage()), 'employee_id')
+                        && str_contains(strtolower($e->getMessage()), 'duplicate');
+
+                    if (!$isDuplicateEmployeeId || $attempt === 5) {
+                        throw $e;
+                    }
+
+                    Log::warning('Duplicate employee_id detected during create, retrying', [
+                        'attempt' => $attempt,
+                    ]);
+                }
+            }
+
+            if (!$employee) {
+                throw new \RuntimeException('Unable to generate unique employee_id after retries.');
+            }
 
             DB::commit();
 
@@ -117,26 +141,27 @@ class EmployeeCreationService
     /**
      * Generate a unique employee ID
      */
-    private function generateEmployeeId(int $vendorId): string
+    private function generateEmployeeId(): string
     {
-        $prefix = 'EMP';
-        $year = date('Y');
-        $month = date('m');
-        
-        // Get the latest employee ID for this vendor and year
-        $latestEmployee = Employee::where('vendor_id', $vendorId)
-            ->whereYear('created_at', $year)
-            ->orderBy('id', 'desc')
-            ->first();
-        
-        if ($latestEmployee && preg_match('/' . $prefix . $year . $month . '(\d{4})$/', $latestEmployee->employee_id, $matches)) {
-            $sequence = intval($matches[1]) + 1;
-        } else {
-            $sequence = 1;
+        $prefix = 'EMP' . now()->format('Ym');
+
+        $latestEmployeeId = Employee::withTrashed()
+            ->where('employee_id', 'like', $prefix . '%')
+            ->orderByDesc('employee_id')
+            ->value('employee_id');
+
+        $sequence = 1;
+        if ($latestEmployeeId && preg_match('/^' . preg_quote($prefix, '/') . '(\d{4})$/', $latestEmployeeId, $matches)) {
+            $sequence = (int) $matches[1] + 1;
         }
-        
-        // Format: EMP2025020001 (EMP + Year + Month + 4-digit sequence)
-        return $prefix . $year . $month . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+
+        do {
+            $candidate = $prefix . str_pad((string) $sequence, 4, '0', STR_PAD_LEFT);
+            $exists = Employee::withTrashed()->where('employee_id', $candidate)->exists();
+            $sequence++;
+        } while ($exists);
+
+        return $candidate;
     }
 
     /**

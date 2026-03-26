@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\Client\ClientController;
 use App\Http\Controllers\Api\V1\Client\ClientAvailabilityController; // NEW: Add this line
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\Employee\EmployeeAuthController;
+use App\Http\Controllers\Api\V1\Employee\TimeTrackingController;
 use App\Http\Controllers\Api\V1\Booking\BookingController;
 use App\Http\Controllers\Api\V1\Booking\OnlineBookingOptionsController;
 use App\Http\Controllers\Api\V1\DeploymentController;
@@ -11,6 +13,7 @@ use App\Http\Controllers\Api\V1\Dispatch\ScheduleDispatchController;
 use App\Http\Controllers\Api\V1\Quotes\QuoteController;
 use App\Http\Controllers\Api\V1\SignedFileController;
 use App\Http\Controllers\Api\V1\UploadController;
+use App\Http\Controllers\Api\V1\Vendor\VendorTimeEntryController;
 use App\Http\Controllers\Api\V1\Jobs\JobController;
 use App\Http\Controllers\Api\V1\Schedule\ScheduleController;
 use App\Http\Controllers\Api\V1\OptionsController;
@@ -70,10 +73,35 @@ Route::prefix('auth')->group(function () {
     Route::post('password/verify-token', [AuthController::class, 'verifyResetToken'])->name('auth.verify-email');
 });
 
+Route::prefix('employee')->group(function () {
+    Route::post('login', [EmployeeAuthController::class, 'login']);
+    Route::post('set-password', [EmployeeAuthController::class, 'setPassword']);
+    Route::post('forgot-password', [EmployeeAuthController::class, 'forgotPassword']);
+    Route::post('reset-password', [EmployeeAuthController::class, 'resetPassword']);
+});
+
+Route::middleware(['employee.jwt'])->prefix('employee')->group(function () {
+    Route::get('me', [EmployeeAuthController::class, 'me']);
+
+    Route::get('dashboard', [TimeTrackingController::class, 'dashboard']);
+    Route::post('check-in', [TimeTrackingController::class, 'checkIn']);
+    Route::post('check-out', [TimeTrackingController::class, 'checkOut']);
+    Route::post('break-start', [TimeTrackingController::class, 'breakStart']);
+    Route::post('break-end', [TimeTrackingController::class, 'breakEnd']);
+    Route::get('time-entries', [TimeTrackingController::class, 'timeEntries']);
+    Route::put('time-entry/{id}', [TimeTrackingController::class, 'updateTimeEntry']);
+});
+
 // ============================================
 // PROTECTED ROUTES - REQUIRE AUTHENTICATION
 // ============================================
 Route::middleware(['jwt.verify'])->group(function () {
+
+    Route::prefix('vendor')->group(function () {
+        Route::get('time-entries', [VendorTimeEntryController::class, 'index']);
+        Route::post('time-entry/{id}/approve', [VendorTimeEntryController::class, 'approve']);
+        Route::post('time-entry/{id}/reject', [VendorTimeEntryController::class, 'reject']);
+    });
 
     Route::post('/bookings', [BookingController::class, 'store']);
 

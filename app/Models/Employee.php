@@ -5,8 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Tymon\JWTAuth\Contracts\JWTSubject;
 
-class Employee extends BaseModel
+class Employee extends BaseModel implements JWTSubject
 {
     use SoftDeletes;
 
@@ -15,12 +16,15 @@ class Employee extends BaseModel
     protected $fillable = [
         'vendor_id',
         'employee_id',
+        'name',
         'first_name',
         'last_name',
         'date_of_birth',
         'gender',
         'email',
+        'phone',
         'mobile_number',
+        'password',
         'address',
         'designation',
         'department',
@@ -31,6 +35,10 @@ class Employee extends BaseModel
         'created_by',
         'updated_by',
         'deleted_by'
+    ];
+
+    protected $hidden = [
+        'password',
     ];
 
     protected $casts = [
@@ -121,5 +129,18 @@ class Employee extends BaseModel
     public function scopeByDesignation($query, $designation)
     {
         return $query->where('designation', $designation);
+    }
+
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    public function getJWTCustomClaims(): array
+    {
+        return [
+            'vendor_id' => $this->vendor_id,
+            'scope' => 'employee',
+        ];
     }
 }

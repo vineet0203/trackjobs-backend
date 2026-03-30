@@ -84,6 +84,7 @@ Route::middleware(['employee.jwt'])->prefix('employee')->group(function () {
     Route::get('me', [EmployeeAuthController::class, 'me']);
 
     Route::get('dashboard', [TimeTrackingController::class, 'dashboard']);
+    Route::get('listings', [TimeTrackingController::class, 'listings']);
     Route::post('check-in', [TimeTrackingController::class, 'checkIn']);
     Route::post('check-out', [TimeTrackingController::class, 'checkOut']);
     Route::post('break-start', [TimeTrackingController::class, 'breakStart']);

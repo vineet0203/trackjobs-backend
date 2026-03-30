@@ -48,7 +48,64 @@ class TimeTrackingController extends BaseController
                 'total' => $entriesPaginator->total(),
             ],
             'active_entry' => $activeEntry ? $this->formatActiveEntry($activeEntry) : null,
+            'working_hours' => $this->workingHoursSummary($employeeId, $activeEntry),
         ], 'Dashboard data fetched successfully.');
+    }
+
+    public function listings(Request $request): JsonResponse
+    {
+        $employee = $request->attributes->get('employee');
+        $employeeId = (int) $employee['id'];
+        $vendorId = (int) $employee['vendor_id'];
+
+        $rows = DB::table('job_assignments as ja')
+            ->join('jobs as j', 'j.id', '=', 'ja.job_id')
+            ->where('ja.employee_id', $employeeId)
+            ->where('j.vendor_id', $vendorId)
+            ->whereNull('j.deleted_at')
+            ->orderByDesc('ja.assigned_at')
+            ->select([
+                'j.id',
+                'j.job_number',
+                'j.title',
+                'j.description',
+                'j.priority',
+                'j.work_type',
+                'j.status as source_status',
+                'j.issue_date',
+                'j.start_date',
+                'j.end_date',
+                'ja.shift',
+                'ja.assigned_at',
+            ])
+            ->get();
+
+        $items = $rows->map(function ($row) {
+            $displayDate = $row->start_date ?: $row->issue_date;
+            if (!$displayDate && $row->assigned_at) {
+                $displayDate = Carbon::parse($row->assigned_at)->toDateString();
+            }
+
+            return [
+                'id' => (int) $row->id,
+                'title' => $row->title,
+                'date' => $displayDate,
+                'status' => $this->normalizeListingStatus((string) $row->source_status),
+                'basic_details' => [
+                    'job_number' => $row->job_number,
+                    'priority' => $row->priority,
+                    'work_type' => $row->work_type,
+                    'shift' => $row->shift,
+                    'source_status' => $row->source_status,
+                    'description' => $row->description,
+                    'end_date' => $row->end_date,
+                ],
+            ];
+        })->values();
+
+        return $this->successResponse([
+            'items' => $items,
+        ], 'Employee listings fetched successfully.');
     }
 
     public function checkIn(Request $request): JsonResponse
@@ -384,5 +441,75 @@ class TimeTrackingController extends BaseController
             ->value('shift');
 
         return $task ?: '-';
+    }
+
+    private function workingHoursSummary(int $employeeId, ?TimeEntry $activeEntry): array
+    {
+        $now = now();
+        $todayStart = $now->copy()->startOfDay();
+        $weekStart = $now->copy()->startOfWeek();
+        $monthStart = $now->copy()->startOfMonth();
+
+        $todaySeconds = $this->sumStoredSeconds($employeeId, $todayStart, $now);
+        $weekSeconds = $this->sumStoredSeconds($employeeId, $weekStart, $now);
+        $monthSeconds = $this->sumStoredSeconds($employeeId, $monthStart, $now);
+
+        if ($activeEntry && !$activeEntry->check_out) {
+            $liveSeconds = $this->activeWorkedSeconds($activeEntry);
+            if ($activeEntry->check_in && $activeEntry->check_in->gte($todayStart)) {
+                $todaySeconds += $liveSeconds;
+            }
+            if ($activeEntry->check_in && $activeEntry->check_in->gte($weekStart)) {
+                $weekSeconds += $liveSeconds;
+            }
+            if ($activeEntry->check_in && $activeEntry->check_in->gte($monthStart)) {
+                $monthSeconds += $liveSeconds;
+            }
+        }
+
+        return [
+            'today' => (int) $todaySeconds,
+            'week' => (int) $weekSeconds,
+            'month' => (int) $monthSeconds,
+        ];
+    }
+
+    private function sumStoredSeconds(int $employeeId, Carbon $from, Carbon $to): int
+    {
+        return (int) TimeEntry::where('employee_id', $employeeId)
+            ->whereBetween('check_in', [$from, $to])
+            ->sum('total_time');
+    }
+
+    private function activeWorkedSeconds(TimeEntry $entry): int
+    {
+        if (!$entry->check_in) {
+            return 0;
+        }
+
+        $entry->loadMissing('breaks');
+
+        $closedBreakSeconds = (int) $entry->breaks
+            ->filter(fn (BreakEntry $break) => $break->break_end !== null)
+            ->sum('break_duration');
+
+        $openBreak = $entry->breaks->first(fn (BreakEntry $break) => $break->break_end === null);
+        $openBreakSeconds = 0;
+        if ($openBreak && $openBreak->break_start) {
+            $openBreakSeconds = max(0, $openBreak->break_start->diffInSeconds(now()));
+        }
+
+        return max(0, $entry->check_in->diffInSeconds(now()) - $closedBreakSeconds - $openBreakSeconds);
+    }
+
+    private function normalizeListingStatus(string $status): string
+    {
+        $normalized = strtolower(trim($status));
+
+        if (in_array($normalized, ['scheduled', 'in_progress', 'completed'], true)) {
+            return 'approved';
+        }
+
+        return 'pending';
     }
 }

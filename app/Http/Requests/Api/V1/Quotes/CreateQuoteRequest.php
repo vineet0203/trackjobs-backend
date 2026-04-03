@@ -18,6 +18,7 @@ class CreateQuoteRequest extends FormRequest
             // Section 1: Quote Details
             'title' => 'required|string|max:255',
             'client_id' => 'required|exists:clients,id',
+            'customer_id' => 'sometimes|exists:clients,id',
             'status' => 'sometimes|in:draft,sent,pending,accepted,rejected,expired',
             'equity_status' => 'sometimes|in:pending,approved,rejected,not_applicable',
             'currency' => 'required|string|size:3|in:USD,EUR,GBP,JPY,CAD,AUD',
@@ -33,6 +34,8 @@ class CreateQuoteRequest extends FormRequest
 
             // Section 3: Pricing Summary
             'discount' => 'nullable|numeric|min:0',
+            'is_tax_applicable' => 'sometimes|boolean',
+            'tax_percentage' => 'required_if:is_tax_applicable,true|integer|in:0,5,12,18,28',
             'deposit_required' => 'sometimes|boolean',
             'deposit_type' => 'required_if:deposit_required,true|in:percentage,fixed',
             'deposit_amount' => 'required_if:deposit_required,true|numeric|min:0',
@@ -83,6 +86,8 @@ class CreateQuoteRequest extends FormRequest
             'line_items.*.unit_price.numeric' => 'Unit price must be a number.',
             'line_items.*.tax_rate.between' => 'Tax rate must be between 0 and 100.',
             'discount.min' => 'Discount cannot be negative.',
+            'tax_percentage.required_if' => 'Tax percentage is required when tax is applicable.',
+            'tax_percentage.in' => 'Tax percentage must be one of 0, 5, 12, 18, or 28.',
             'deposit_type.required_if' => 'Deposit type is required when deposit is required.',
             'deposit_type.in' => 'Deposit type must be percentage or fixed.',
             'deposit_amount.required_if' => 'Deposit amount is required when deposit is required.',
@@ -104,10 +109,21 @@ class CreateQuoteRequest extends FormRequest
             'equity_status' => $this->equity_status ?? 'not_applicable',
             'currency' => strtoupper($this->currency ?? 'USD'),
             'discount' => $this->discount ?? 0,
+            'is_tax_applicable' => filter_var($this->is_tax_applicable ?? false, FILTER_VALIDATE_BOOLEAN),
             'deposit_required' => filter_var($this->deposit_required ?? false, FILTER_VALIDATE_BOOLEAN),
             'can_convert_to_job' => filter_var($this->can_convert_to_job ?? true, FILTER_VALIDATE_BOOLEAN),
             'approval_status' => $this->approval_status ?? 'pending',
         ];
+
+        if (!$data['is_tax_applicable']) {
+            $data['tax_percentage'] = 0;
+        } else {
+            $data['tax_percentage'] = (int) ($this->tax_percentage ?? 0);
+        }
+
+        if (!$this->has('client_id') && $this->has('customer_id')) {
+            $data['client_id'] = $this->customer_id;
+        }
 
         $this->merge($data);
     }

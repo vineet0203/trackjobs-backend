@@ -32,6 +32,7 @@ class Client extends BaseModel
         'billing_name',
         'payment_term',
         'preferred_currency',
+        'is_tax_applicable',
         'tax_percentage',
         'website_url',
         'logo_path',
@@ -44,7 +45,8 @@ class Client extends BaseModel
 
     protected $casts = [
         'client_type' => 'string',
-        'tax_percentage' => 'decimal:2',
+        'is_tax_applicable' => 'boolean',
+        'tax_percentage' => 'integer',
         'deleted_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

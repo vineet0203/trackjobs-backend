@@ -45,6 +45,7 @@ class ClientResource extends JsonResource
                 'billing_name' => $this->billing_name,
             ],
             'tax' => [
+                'is_tax_applicable' => (bool) $this->is_tax_applicable,
                 'tax_percentage' => $this->tax_percentage,
             ],
             'website_url' => $this->website_url,

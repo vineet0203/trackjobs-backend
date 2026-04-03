@@ -30,6 +30,8 @@ class QuoteUpdateService
                 'quote_due_date',
                 'currency',
                 'discount',
+                'is_tax_applicable',
+                'tax_percentage',
                 'deposit_required',
                 'deposit_type',
                 'deposit_amount',
@@ -48,6 +50,13 @@ class QuoteUpdateService
                 if (array_key_exists($field, $data)) {
                     $updateData[$field] = $data[$field];
                 }
+            }
+
+            if (array_key_exists('is_tax_applicable', $updateData)) {
+                $isTaxApplicable = (bool) $updateData['is_tax_applicable'];
+                $updateData['tax_percentage'] = $isTaxApplicable
+                    ? (int) ($updateData['tax_percentage'] ?? $quote->tax_percentage ?? 0)
+                    : 0;
             }
 
             // Handle status updates

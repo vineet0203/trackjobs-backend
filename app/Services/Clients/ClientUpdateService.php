@@ -65,7 +65,15 @@ class ClientUpdateService
 
             // Handle tax object
             if (isset($data['tax']) && is_array($data['tax'])) {
-                $updateData['tax_percentage'] = $data['tax']['tax_percentage'] ?? null;
+                $isTaxApplicable = filter_var($data['tax']['is_tax_applicable'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $updateData['is_tax_applicable'] = $isTaxApplicable;
+                $updateData['tax_percentage'] = $isTaxApplicable
+                    ? (int) ($data['tax']['tax_percentage'] ?? 0)
+                    : 0;
+            } elseif (array_key_exists('is_tax_applicable', $data) || array_key_exists('tax_percentage', $data)) {
+                $isTaxApplicable = filter_var($data['is_tax_applicable'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $updateData['is_tax_applicable'] = $isTaxApplicable;
+                $updateData['tax_percentage'] = $isTaxApplicable ? (int) ($data['tax_percentage'] ?? 0) : 0;
             }
 
             // Add other flat fields directly

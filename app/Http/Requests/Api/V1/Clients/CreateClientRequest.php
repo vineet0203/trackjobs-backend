@@ -181,7 +181,8 @@ class CreateClientRequest extends FormRequest
             |--------------------------------------------------------------------------
             */
             'tax' => 'nullable|array',
-            'tax.tax_percentage' => 'nullable|numeric|between:0,100',
+            'tax.is_tax_applicable' => 'nullable|boolean',
+            'tax.tax_percentage' => 'required_if:tax.is_tax_applicable,true|integer|in:0,5,12,18,28',
 
             /*
             |--------------------------------------------------------------------------
@@ -246,9 +247,20 @@ class CreateClientRequest extends FormRequest
             'website_url' => $this->prepareWebsiteUrl($this->website_url),
         ];
 
-        // Handle tax percentage
-        if ($this->has('tax') && isset($this->tax['tax_percentage'])) {
-            $data['tax_percentage'] = (float)$this->tax['tax_percentage'];
+        // Handle tax object
+        $isTaxApplicable = false;
+        if ($this->has('tax') && is_array($this->tax)) {
+            if (array_key_exists('is_tax_applicable', $this->tax)) {
+                $isTaxApplicable = filter_var($this->tax['is_tax_applicable'], FILTER_VALIDATE_BOOLEAN);
+            }
+
+            $data['is_tax_applicable'] = $isTaxApplicable;
+            $data['tax_percentage'] = $isTaxApplicable
+                ? (int) ($this->tax['tax_percentage'] ?? 0)
+                : 0;
+        } else {
+            $data['is_tax_applicable'] = false;
+            $data['tax_percentage'] = 0;
         }
 
         // Handle payment currency case

@@ -193,7 +193,8 @@ class UpdateClientRequest extends FormRequest
             |--------------------------------------------------------------------------
             */
             'tax' => 'nullable|array',
-            'tax.tax_percentage' => 'nullable|numeric|between:0,100',
+            'tax.is_tax_applicable' => 'nullable|boolean',
+            'tax.tax_percentage' => 'required_if:tax.is_tax_applicable,true|integer|in:0,5,12,18,28',
 
             /*
             |--------------------------------------------------------------------------
@@ -265,9 +266,13 @@ class UpdateClientRequest extends FormRequest
             'website_url' => $this->prepareWebsiteUrl($this->website_url),
         ];
 
-        // Handle tax percentage from tax object
-        if ($this->has('tax') && isset($this->tax['tax_percentage'])) {
-            $data['tax_percentage'] = (float)$this->tax['tax_percentage'];
+        // Handle tax object
+        if ($this->has('tax') && is_array($this->tax)) {
+            $currentApplicable = filter_var($this->input('tax.is_tax_applicable', false), FILTER_VALIDATE_BOOLEAN);
+            $data['is_tax_applicable'] = $currentApplicable;
+            $data['tax_percentage'] = $currentApplicable
+                ? (int) ($this->input('tax.tax_percentage', 0))
+                : 0;
         }
 
         // Handle payment currency case
@@ -309,7 +314,7 @@ class UpdateClientRequest extends FormRequest
         return [
             'business_name.unique' => 'Business name already exists.',
             'email.unique' => 'Email already exists.',
-            'tax.tax_percentage.between' => 'Tax must be between 0-100.',
+            'tax.tax_percentage.in' => 'Tax percentage must be one of 0, 5, 12, 18, or 28.',
             'logo_temp_id.regex' => 'Invalid logo upload ID.',
             'availability_schedule.preferred_end_time.after' => 'End time must be after start time.',
             'availability_schedule.lunch_end.after' => 'Lunch end time must be after lunch start time.',

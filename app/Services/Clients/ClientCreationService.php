@@ -73,10 +73,19 @@ class ClientCreationService
 
             // Handle tax object
             if (isset($data['tax']) && is_array($data['tax'])) {
-                $createData['tax_percentage'] = $data['tax']['tax_percentage'] ?? null;
+                $isTaxApplicable = filter_var($data['tax']['is_tax_applicable'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $createData['is_tax_applicable'] = $isTaxApplicable;
+                $createData['tax_percentage'] = $isTaxApplicable
+                    ? (int) ($data['tax']['tax_percentage'] ?? 0)
+                    : 0;
                 Log::info('Tax data extracted', [
-                    'tax_percentage' => $data['tax']['tax_percentage'] ?? null
+                    'is_tax_applicable' => $isTaxApplicable,
+                    'tax_percentage' => $createData['tax_percentage']
                 ]);
+            } elseif (array_key_exists('is_tax_applicable', $data) || array_key_exists('tax_percentage', $data)) {
+                $isTaxApplicable = filter_var($data['is_tax_applicable'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $createData['is_tax_applicable'] = $isTaxApplicable;
+                $createData['tax_percentage'] = $isTaxApplicable ? (int) ($data['tax_percentage'] ?? 0) : 0;
             }
 
             // Add other flat fields directly

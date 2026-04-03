@@ -27,6 +27,8 @@ class QuoteResource extends JsonResource
             // Section 3: Pricing Summary
             'subtotal' => (float) $this->subtotal,
             'discount' => (float) $this->discount,
+            'is_tax_applicable' => (bool) $this->is_tax_applicable,
+            'tax_percentage' => (int) $this->tax_percentage,
             'total_amount' => (float) $this->total_amount,
             'deposit_required' => (bool) $this->deposit_required,
             'deposit_type' => $this->deposit_type,

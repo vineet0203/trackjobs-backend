@@ -22,6 +22,8 @@ class Quote extends BaseModel
         'currency',
         'subtotal',
         'discount',
+        'is_tax_applicable',
+        'tax_percentage',
         'total_amount',
         'deposit_required',
         'deposit_type',
@@ -50,6 +52,8 @@ class Quote extends BaseModel
     protected $casts = [
         'subtotal' => 'decimal:2',
         'discount' => 'decimal:2',
+        'is_tax_applicable' => 'boolean',
+        'tax_percentage' => 'integer',
         'total_amount' => 'decimal:2',
         'deposit_amount' => 'decimal:2',
         'deposit_required' => 'boolean',

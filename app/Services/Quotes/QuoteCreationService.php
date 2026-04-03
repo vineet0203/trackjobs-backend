@@ -47,6 +47,8 @@ class QuoteCreationService
                 'currency' => $data['currency'] ?? 'USD',
                 'subtotal' => 0,
                 'discount' => $data['discount'] ?? 0,
+                'is_tax_applicable' => (bool) ($data['is_tax_applicable'] ?? false),
+                'tax_percentage' => (bool) ($data['is_tax_applicable'] ?? false) ? (int) ($data['tax_percentage'] ?? 0) : 0,
                 'total_amount' => 0,
                 'deposit_required' => $data['deposit_required'] ?? false,
                 'deposit_type' => ($data['deposit_required'] ?? false) ? ($data['deposit_type'] ?? null) : null,

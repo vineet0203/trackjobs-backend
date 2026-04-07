@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ScheduleDispatchDashboardController;
+use App\Http\Controllers\Api\V1\Invoices\InvoiceController;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 
@@ -33,3 +34,6 @@ Route::get('/test-mail', function () {
 
 Route::get('/schedule-dispatch', ScheduleDispatchDashboardController::class)
     ->name('schedule-dispatch.dashboard');
+
+Route::get('/invoice/public/{token}', [InvoiceController::class, 'publicView'])
+    ->name('invoice.public.show');

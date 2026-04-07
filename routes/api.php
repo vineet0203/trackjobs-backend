@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\V1\Jobs\JobController;
 use App\Http\Controllers\Api\V1\Schedule\ScheduleController;
 use App\Http\Controllers\Api\V1\OptionsController;
 use App\Http\Controllers\Api\V1\Onboarding\OnboardingController;
+use App\Http\Controllers\Api\V1\Invoices\InvoiceController;
 use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -249,6 +250,18 @@ Route::middleware(['jwt.verify'])->group(function () {
 
             // Job assignment
             Route::post('/{id}/assign', [JobController::class, 'assignJob']);
+        });
+
+        // ============================================
+        // INVOICE MANAGEMENT ROUTES
+        // ============================================
+        Route::prefix('invoices')->group(function () {
+            Route::get('/', [InvoiceController::class, 'index']);
+            Route::post('/', [InvoiceController::class, 'store']);
+            Route::get('/{id}', [InvoiceController::class, 'show']);
+            Route::put('/{id}', [InvoiceController::class, 'update']);
+            Route::delete('/{id}', [InvoiceController::class, 'destroy']);
+            Route::post('/{id}/send', [InvoiceController::class, 'send']);
         });
 
         // ============================================

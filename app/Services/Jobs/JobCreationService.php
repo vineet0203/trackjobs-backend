@@ -204,18 +204,6 @@ class JobCreationService
                 'is_converted_from_quote' => true,
             ];
 
-            // Create tasks from quote items
-            $tasks = [];
-            foreach ($quote->items as $index => $item) {
-                $tasks[] = [
-                    'name' => $item->item_name,
-                    'description' => $item->description ?? "Task from quote item",
-                    'completed' => 0,
-                    'due_date' => now()->addDays($index + 1)->toDateString(), // Spread out due dates
-                ];
-            }
-            $data['tasks'] = $tasks;
-
             // Create the job (job)
             $Job = $this->create($data, $convertedBy);
 
@@ -235,7 +223,7 @@ class JobCreationService
                 'job_id' => $Job->id,
                 'job_number' => $Job->job_number,
                 'converted_by' => $convertedBy,
-                'tasks_created' => count($tasks),
+                'tasks_created' => 0,
             ]);
 
             DB::commit();

@@ -16,6 +16,7 @@ class QuoteResource extends JsonResource
             'quote_number' => $this->quote_number,
             'title' => $this->title,
             'client_id' => $this->client_id,
+            'customer_id' => $this->customer_id,
             'client_name' => $this->client_name,
             'client_email' => $this->client_email,
             'equity_status' => $this->equity_status,
@@ -30,6 +31,7 @@ class QuoteResource extends JsonResource
             'is_tax_applicable' => (bool) $this->is_tax_applicable,
             'tax_percentage' => (int) $this->tax_percentage,
             'total_amount' => (float) $this->total_amount,
+            'customer_approved_price' => $this->customer_approved_price ? (float) $this->customer_approved_price : null,
             'deposit_required' => (bool) $this->deposit_required,
             'deposit_type' => $this->deposit_type,
             'deposit_amount' => $this->deposit_amount ? (float) $this->deposit_amount : null,
@@ -37,6 +39,7 @@ class QuoteResource extends JsonResource
             // Section 4: Client Approval
             'approval_status' => $this->approval_status,
             'client_signature' => $this->client_signature,
+            'customer_signature' => $this->customer_signature,
             'approval_date' => $this->approval_date?->format('Y-m-d H:i:s'),
             'approval_action_date' => $this->approval_action_date?->format('Y-m-d H:i:s'),
             

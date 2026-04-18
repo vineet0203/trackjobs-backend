@@ -15,6 +15,7 @@ class Quote extends BaseModel
         'quote_number',
         'title',
         'client_id',
+        'customer_id',
         'client_name',
         'client_email',
         'equity_status',
@@ -25,11 +26,13 @@ class Quote extends BaseModel
         'is_tax_applicable',
         'tax_percentage',
         'total_amount',
+        'customer_approved_price',
         'deposit_required',
         'deposit_type',
         'deposit_amount',
         'approval_status',
         'client_signature',
+        'customer_signature',
         'approval_date',
         'approval_action_date',
         'status',
@@ -55,6 +58,7 @@ class Quote extends BaseModel
         'is_tax_applicable' => 'boolean',
         'tax_percentage' => 'integer',
         'total_amount' => 'decimal:2',
+        'customer_approved_price' => 'decimal:2',
         'deposit_amount' => 'decimal:2',
         'deposit_required' => 'boolean',
         'can_convert_to_job' => 'boolean',
@@ -81,6 +85,11 @@ class Quote extends BaseModel
     public function client()
     {
         return $this->belongsTo(Client::class, 'client_id');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 
     public function reminders()
@@ -126,11 +135,11 @@ class Quote extends BaseModel
     }
 
     /**
-     * Scope for active quotes
+     * Scope for active quotes (draft or pending customer approval)
      */
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['draft', 'sent', 'pending']);
+        return $query->whereIn('status', ['draft', 'pending']);
     }
 
     /**
@@ -150,11 +159,11 @@ class Quote extends BaseModel
     }
 
     /**
-     * Check if quote can be edited
+     * Check if quote can be edited (only in draft, not after sent to customer)
      */
     public function canBeEdited(): bool
     {
-        return in_array($this->status, ['draft', 'sent']);
+        return $this->status === 'draft';
     }
 
     /**

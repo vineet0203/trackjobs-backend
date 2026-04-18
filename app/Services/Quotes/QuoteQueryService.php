@@ -152,7 +152,6 @@ class QuoteQueryService
         return [
             'total' => Quote::where('vendor_id', $vendorId)->count(),
             'draft' => Quote::where('vendor_id', $vendorId)->where('status', 'draft')->count(),
-            'sent' => Quote::where('vendor_id', $vendorId)->where('status', 'sent')->count(),
             'pending' => Quote::where('vendor_id', $vendorId)->where('status', 'pending')->count(),
             'approved' => Quote::where('vendor_id', $vendorId)->where('status', 'approved')->count(),
             'rejected' => Quote::where('vendor_id', $vendorId)->where('status', 'rejected')->count(),

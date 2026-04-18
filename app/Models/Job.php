@@ -20,6 +20,7 @@ class Job extends BaseModel
         'description',
         'vendor_id',
         'client_id',
+        'customer_id',
         'quote_id',
         'assigned_to',
         'created_by',
@@ -143,6 +144,11 @@ class Job extends BaseModel
     public function client()
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 
     public function quote()

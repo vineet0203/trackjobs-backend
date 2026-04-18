@@ -3,6 +3,10 @@
 use App\Http\Controllers\Api\V1\Client\ClientController;
 use App\Http\Controllers\Api\V1\Client\ClientAvailabilityController; // NEW: Add this line
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\Customer\CustomerAuthController;
+use App\Http\Controllers\Api\V1\Customer\CustomerJobController;
+use App\Http\Controllers\Api\V1\Customer\CustomerQuoteController;
+use App\Http\Controllers\Api\V1\Customer\CustomerController;
 use App\Http\Controllers\Api\V1\Employee\EmployeeAuthController;
 use App\Http\Controllers\Api\V1\Employee\TimeTrackingController;
 use App\Http\Controllers\Api\V1\Booking\BookingController;
@@ -81,6 +85,11 @@ Route::prefix('employee')->group(function () {
     Route::post('reset-password', [EmployeeAuthController::class, 'resetPassword']);
 });
 
+Route::prefix('customer')->group(function () {
+    Route::post('login', [CustomerAuthController::class, 'login']);
+    Route::post('set-password', [CustomerAuthController::class, 'setPassword']);
+});
+
 Route::middleware(['employee.jwt'])->prefix('employee')->group(function () {
     Route::get('me', [EmployeeAuthController::class, 'me']);
 
@@ -94,10 +103,24 @@ Route::middleware(['employee.jwt'])->prefix('employee')->group(function () {
     Route::put('time-entry/{id}', [TimeTrackingController::class, 'updateTimeEntry']);
 });
 
+Route::middleware(['customer.jwt'])->prefix('customer')->group(function () {
+    Route::get('me', [CustomerAuthController::class, 'me']);
+    Route::get('quotes', [CustomerQuoteController::class, 'index']);
+    Route::get('quotes/{id}', [CustomerQuoteController::class, 'show']);
+    Route::post('quotes/{id}/decision', [CustomerQuoteController::class, 'decide']);
+    Route::post('quotes/{id}/submit', [CustomerQuoteController::class, 'submit']);
+
+    Route::get('jobs', [CustomerJobController::class, 'index']);
+    Route::get('jobs/{id}', [CustomerJobController::class, 'show']);
+});
+
 // ============================================
 // PROTECTED ROUTES - REQUIRE AUTHENTICATION
 // ============================================
 Route::middleware(['jwt.verify'])->group(function () {
+
+    Route::post('/customers', [CustomerController::class, 'store']);
+    Route::post('/customers/resend-setup-link', [CustomerController::class, 'resendSetupLink']);
 
     Route::prefix('vendor')->group(function () {
         Route::get('time-entries', [VendorTimeEntryController::class, 'index']);

@@ -82,6 +82,7 @@ class Kernel extends HttpKernel
         'jwt.refresh' => \Tymon\JWTAuth\Http\Middleware\RefreshToken::class,
         'jwt.verify' => \App\Http\Middleware\JwtMiddleware::class,
         'employee.jwt' => \App\Http\Middleware\EmployeeJwtMiddleware::class,
+        'customer.jwt' => \App\Http\Middleware\CustomerJwtMiddleware::class,
 
         // ========== GITHUB WEBHOOK MIDDLEWARE ==========
         'github-webhook' => \App\Http\Middleware\VerifyGitHubWebhook::class,

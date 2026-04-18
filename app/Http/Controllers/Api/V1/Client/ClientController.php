@@ -8,10 +8,12 @@ use App\Http\Requests\Api\V1\Clients\UpdateClientRequest;
 use App\Http\Requests\Api\V1\Clients\GetClientsRequest;
 use App\Http\Resources\Api\V1\Client\ClientCollection;
 use App\Http\Resources\Api\V1\Client\ClientResource;
+use App\Models\Customer;
 use App\Services\Clients\ClientCreationService;
 use App\Services\Clients\ClientQueryService;
 use App\Services\Clients\ClientUpdateService;
 use App\Services\Clients\ClientDeletionService;
+use App\Services\Customer\CustomerAccountService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
@@ -24,17 +26,20 @@ class ClientController extends BaseController
     private ClientQueryService $clientQueryService;
     private ClientUpdateService $clientUpdateService;
     private ClientDeletionService $clientDeletionService;
+    private CustomerAccountService $customerAccountService;
 
     public function __construct(
         ClientCreationService $clientCreationService,
         ClientQueryService $clientQueryService,
         ClientUpdateService $clientUpdateService,
-        ClientDeletionService $clientDeletionService
+        ClientDeletionService $clientDeletionService,
+        CustomerAccountService $customerAccountService
     ) {
         $this->clientCreationService = $clientCreationService;
         $this->clientQueryService = $clientQueryService;
         $this->clientUpdateService = $clientUpdateService;
         $this->clientDeletionService = $clientDeletionService;
+        $this->customerAccountService = $customerAccountService;
     }
 
     /**
@@ -60,9 +65,64 @@ class ClientController extends BaseController
 
             $client = $this->clientCreationService->create($validatedData, auth()->id());
 
+            $passwordSetup = [
+                'email' => $client->email,
+                'email_sent' => false,
+                'expires_in_minutes' => 60,
+                'mail_error' => null,
+                'already_activated' => false,
+            ];
+
+            try {
+                $customerName = trim((string) (
+                    $client->contact_person_name
+                    ?: $client->business_name
+                    ?: ($client->first_name ?? '') . ' ' . ($client->last_name ?? '')
+                ));
+
+                $existingCustomer = Customer::where('email', $client->email)->first();
+
+                if ($existingCustomer) {
+                    if (empty($existingCustomer->password)) {
+                        $setupResult = $this->customerAccountService->resendSetupLink($existingCustomer);
+                        $passwordSetup['email_sent'] = (bool) $setupResult['email_sent'];
+                        $passwordSetup['mail_error'] = $setupResult['mail_error'];
+                        $passwordSetup['expires_in_minutes'] = $setupResult['expires_in_minutes'];
+                    } else {
+                        $passwordSetup['already_activated'] = true;
+                    }
+                } else {
+                    $setupResult = $this->customerAccountService->createCustomer([
+                        'name' => $customerName ?: 'Customer',
+                        'email' => $client->email,
+                        'phone' => $client->mobile_number,
+                        'status' => $client->status === 'inactive' ? 'inactive' : 'active',
+                    ]);
+
+                    $passwordSetup['email_sent'] = (bool) $setupResult['email_sent'];
+                    $passwordSetup['mail_error'] = $setupResult['mail_error'];
+                    $passwordSetup['expires_in_minutes'] = $setupResult['expires_in_minutes'];
+                }
+            } catch (\Throwable $mailException) {
+                $passwordSetup['mail_error'] = $mailException->getMessage();
+
+                Log::error('Client created but customer setup mail provisioning failed.', [
+                    'client_id' => $client->id,
+                    'email' => $client->email,
+                    'error' => $mailException->getMessage(),
+                ]);
+            }
+
             return $this->createdResponse(
                 new ClientResource($client),
-                'Client added successfully.'
+                $passwordSetup['already_activated']
+                    ? 'Client added successfully. Customer account already active.'
+                    : ($passwordSetup['email_sent']
+                        ? 'Client added successfully. Set password link sent to customer email.'
+                        : 'Client added successfully, but setup email could not be sent.'),
+                [
+                    'password_setup' => $passwordSetup,
+                ]
             );
         } catch (\Exception $e) {
             Log::error('Failed to add client', [

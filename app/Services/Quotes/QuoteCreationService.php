@@ -198,7 +198,7 @@ class QuoteCreationService
     }
 
     /**
-     * Send quote to client
+     * Send quote to client (status changes to 'pending' for approval)
      */
     public function sendQuote(Quote $quote, int $sentBy): Quote
     {
@@ -207,12 +207,12 @@ class QuoteCreationService
         }
 
         $quote->update([
-            'status' => 'sent',
+            'status' => 'pending',
             'sent_at' => now(),
             'updated_by' => $sentBy,
         ]);
 
-        Log::info('Quote sent to client', [
+        Log::info('Quote sent to client (pending approval)', [
             'quote_id' => $quote->id,
             'quote_number' => $quote->quote_number,
             'client_email' => $quote->client_email,
@@ -236,7 +236,7 @@ class QuoteCreationService
         return Quote::where('vendor_id', $vendorId)
             ->where('client_email', $clientEmail)
             ->where('title', 'like', '%' . $title . '%')
-            ->whereIn('status', ['draft', 'sent', 'pending'])
+            ->whereIn('status', ['draft', 'pending'])
             ->exists();
     }
 

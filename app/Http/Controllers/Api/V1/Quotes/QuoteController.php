@@ -331,6 +331,12 @@ class QuoteController extends BaseController
             }
 
             $validatedData = $request->validated();
+            if ($request->has('items')) {
+                $validatedData['items'] = $request->input('items');
+            } elseif ($request->has('line_items')) {
+                $validatedData['items'] = $request->input('line_items');
+            }
+
             $quote = $this->quoteUpdateService->update($quote, $validatedData, auth()->id());
 
             Log::info('=== UPDATE QUOTE END ===', [

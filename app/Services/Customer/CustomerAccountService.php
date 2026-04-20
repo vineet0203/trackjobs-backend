@@ -2,6 +2,7 @@
 
 namespace App\Services\Customer;
 
+use App\Exceptions\CrossRoleEmailConflictException;
 use App\Models\Customer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,13 @@ class CustomerAccountService
 
     public function createCustomer(array $data): array
     {
+        if (DB::table('employees')->where('email', $data['email'])->exists()) {
+            throw new CrossRoleEmailConflictException(
+                'This email is already registered as an Employee.',
+                'employee'
+            );
+        }
+
         $customer = Customer::create([
             'name' => $data['name'],
             'email' => $data['email'],

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Employee;
 
+use App\Exceptions\CrossRoleEmailConflictException;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Requests\Api\V1\Employees\CreateEmployeeRequest;
 use App\Http\Requests\Api\V1\Employees\UpdateEmployeeRequest;
@@ -111,6 +112,19 @@ class EmployeeController extends BaseController
                         'email_sent' => $emailSent,
                     ],
                 ]
+            );
+        } catch (CrossRoleEmailConflictException $e) {
+            Log::warning('Cross-role email conflict while adding employee', [
+                'error' => $e->getMessage(),
+                'existing_role' => $e->getExistingRole(),
+                'vendor_id' => $vendorId ?? null,
+            ]);
+
+            return $this->errorResponse(
+                $e->getMessage(),
+                422,
+                null,
+                ['existing_role' => $e->getExistingRole()]
             );
         } catch (\Exception $e) {
             Log::error('Failed to add employee', [

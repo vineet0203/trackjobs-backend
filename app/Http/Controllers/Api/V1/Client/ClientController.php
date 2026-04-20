@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Client;
 
+use App\Exceptions\CrossRoleEmailConflictException;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Requests\Api\V1\Clients\CreateClientRequest;
 use App\Http\Requests\Api\V1\Clients\UpdateClientRequest;
@@ -103,6 +104,8 @@ class ClientController extends BaseController
                     $passwordSetup['mail_error'] = $setupResult['mail_error'];
                     $passwordSetup['expires_in_minutes'] = $setupResult['expires_in_minutes'];
                 }
+            } catch (CrossRoleEmailConflictException $exception) {
+                throw $exception;
             } catch (\Throwable $mailException) {
                 $passwordSetup['mail_error'] = $mailException->getMessage();
 
@@ -123,6 +126,19 @@ class ClientController extends BaseController
                 [
                     'password_setup' => $passwordSetup,
                 ]
+            );
+        } catch (CrossRoleEmailConflictException $e) {
+            Log::warning('Cross-role email conflict while creating client-linked customer.', [
+                'error' => $e->getMessage(),
+                'existing_role' => $e->getExistingRole(),
+                'vendor_id' => $vendorId ?? null,
+            ]);
+
+            return $this->errorResponse(
+                $e->getMessage(),
+                422,
+                null,
+                ['existing_role' => $e->getExistingRole()]
             );
         } catch (\Exception $e) {
             Log::error('Failed to add client', [

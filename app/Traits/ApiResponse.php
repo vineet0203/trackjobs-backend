@@ -212,7 +212,7 @@ trait ApiResponse
     /**
      * Error response method.
      */
-    protected function errorResponse(string $message = '', int $status = 400, $errors = null): JsonResponse
+    protected function errorResponse(string $message = '', int $status = 400, $errors = null, array $extra = []): JsonResponse
     {
         $response = [
             'success' => false,
@@ -223,6 +223,12 @@ trait ApiResponse
 
         if ($errors) {
             $response['errors'] = $errors;
+        }
+
+        foreach ($extra as $key => $value) {
+            if (!array_key_exists($key, $response)) {
+                $response[$key] = $value;
+            }
         }
 
         return response()->json($response, $status);

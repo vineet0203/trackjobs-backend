@@ -3,11 +3,17 @@
 namespace App\Http\Requests\Api\V1\Employees;
 
 use App\Services\File\FileValidationRules;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class CreateEmployeeRequest extends FormRequest
 {
+    private ?string $existingRole = null;
+    private ?string $existingRoleMessage = null;
+
     public function authorize(): bool
     {
         return true;
@@ -40,6 +46,13 @@ class CreateEmployeeRequest extends FormRequest
                 Rule::unique('employees')->where(
                     fn($q) => $q->where('vendor_id', $vendorId)
                 ),
+                function ($attribute, $value, $fail) {
+                    if (DB::table('customers')->where('email', $value)->exists()) {
+                        $this->existingRole = 'customer';
+                        $this->existingRoleMessage = 'This email is already registered as a Customer. Please use a different email.';
+                        $fail($this->existingRoleMessage);
+                    }
+                },
             ],
             'mobile_number' => 'required|string|max:20',
             'address' => 'nullable|string|max:500',
@@ -143,5 +156,27 @@ class CreateEmployeeRequest extends FormRequest
             
             'profile_photo_temp_id.regex' => 'Invalid photo upload ID.',
         ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        if ($this->existingRole && $this->existingRoleMessage) {
+            throw new HttpResponseException(response()->json([
+                'success' => false,
+                'message' => $this->existingRoleMessage,
+                'existing_role' => $this->existingRole,
+                'errors' => $validator->errors(),
+                'timestamp' => now()->toIso8601String(),
+                'code' => 422,
+            ], 422));
+        }
+
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => 'Validation errors',
+            'errors' => $validator->errors(),
+            'timestamp' => now()->toIso8601String(),
+            'code' => 422,
+        ], 422));
     }
 }

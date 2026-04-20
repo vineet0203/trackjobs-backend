@@ -2,6 +2,7 @@
 
 namespace App\Services\Employee;
 
+use App\Exceptions\CrossRoleEmailConflictException;
 use App\Models\Employee;
 use App\Services\File\FileValidationRules;
 use App\Services\File\FileAttachmentService;
@@ -20,6 +21,13 @@ class EmployeeCreationService
      */
     public function create(array $data, int $createdBy): Employee
     {
+        if (DB::table('customers')->where('email', $data['email'])->exists()) {
+            throw new CrossRoleEmailConflictException(
+                'This email is already registered as a Customer.',
+                'customer'
+            );
+        }
+
         DB::beginTransaction();
 
         try {

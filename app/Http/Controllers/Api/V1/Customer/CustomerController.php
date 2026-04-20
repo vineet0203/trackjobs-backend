@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Customer;
 
+use App\Exceptions\CrossRoleEmailConflictException;
 use App\Http\Controllers\Api\V1\BaseController;
 use App\Http\Requests\Api\V1\Customers\CreateCustomerRequest;
 use App\Http\Requests\Api\V1\Customers\ResendCustomerSetupLinkRequest;
@@ -44,6 +45,18 @@ class CustomerController extends BaseController
             ], $result['email_sent']
                 ? 'Customer created successfully. Set password link sent to email.'
                 : 'Customer created successfully, but setup email could not be sent.');
+        } catch (CrossRoleEmailConflictException $exception) {
+            Log::warning('Cross-role email conflict while creating customer.', [
+                'error' => $exception->getMessage(),
+                'existing_role' => $exception->getExistingRole(),
+            ]);
+
+            return $this->errorResponse(
+                $exception->getMessage(),
+                422,
+                null,
+                ['existing_role' => $exception->getExistingRole()]
+            );
         } catch (\Throwable $exception) {
             Log::error('Failed to create customer.', [
                 'error' => $exception->getMessage(),

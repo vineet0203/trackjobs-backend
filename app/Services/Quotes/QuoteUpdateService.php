@@ -141,73 +141,31 @@ class QuoteUpdateService
      */
     private function updateQuoteItems(Quote $quote, array $items): void
     {
-        $existingItemIds = [];
+        QuoteItem::where('quote_id', $quote->id)->delete();
+
         $sortOrder = 0;
 
         foreach ($items as $item) {
-            // Check if this is an existing item (has real ID)
-            if (isset($item['id']) && is_numeric($item['id']) && !str_starts_with((string)$item['id'], 'temp')) {
-                // Check if item should be deleted
-                if (isset($item['_delete']) && $item['_delete'] === true) {
-                    QuoteItem::where('quote_id', $quote->id)
-                        ->where('id', $item['id'])
-                        ->delete();
-                    continue;
-                }
-
-                // Update existing item
-                $quoteItem = QuoteItem::where('quote_id', $quote->id)
-                    ->where('id', $item['id'])
-                    ->first();
-
-                if ($quoteItem) {
-                    $subtotal = $item['quantity'] * $item['unit_price'];
-                    $taxAmount = $subtotal * (($item['tax_rate'] ?? 0) / 100);
-
-                    $quoteItem->update([
-                        'item_name' => $item['item_name'],
-                        'description' => $item['description'] ?? null,
-                        'quantity' => $item['quantity'],
-                        'unit_price' => $item['unit_price'],
-                        'tax_rate' => $item['tax_rate'] ?? 0,
-                        'tax_amount' => $taxAmount,
-                        'item_total' => $subtotal + $taxAmount,
-                        'sort_order' => $sortOrder++,
-                        'package_id' => $item['package_id'] ?? null,
-                    ]);
-
-                    $existingItemIds[] = $quoteItem->id;
-                }
+            if (isset($item['_delete']) && $item['_delete'] === true) {
+                continue;
             }
-            // New item (no ID or temp ID)
-            else if (!isset($item['_delete']) || $item['_delete'] !== true) {
-                // Calculate totals for new item
-                $subtotal = $item['quantity'] * $item['unit_price'];
-                $taxAmount = $subtotal * (($item['tax_rate'] ?? 0) / 100);
 
-                // Create new item
-                $quoteItem = new QuoteItem([
-                    'quote_id' => $quote->id,
-                    'item_name' => $item['item_name'],
-                    'description' => $item['description'] ?? null,
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'tax_rate' => $item['tax_rate'] ?? 0,
-                    'tax_amount' => $taxAmount,
-                    'item_total' => $subtotal + $taxAmount,
-                    'sort_order' => $sortOrder++,
-                    'package_id' => $item['package_id'] ?? null,
-                ]);
+            $subtotal = $item['quantity'] * $item['unit_price'];
+            $taxAmount = $subtotal * (($item['tax_rate'] ?? 0) / 100);
 
-                $quoteItem->save();
-                $existingItemIds[] = $quoteItem->id;
-            }
+            QuoteItem::create([
+                'quote_id' => $quote->id,
+                'item_name' => $item['item_name'],
+                'description' => $item['description'] ?? null,
+                'quantity' => $item['quantity'],
+                'unit_price' => $item['unit_price'],
+                'tax_rate' => $item['tax_rate'] ?? 0,
+                'tax_amount' => $taxAmount,
+                'item_total' => $subtotal + $taxAmount,
+                'sort_order' => $sortOrder++,
+                'package_id' => $item['package_id'] ?? null,
+            ]);
         }
-
-        // Delete items that weren't in the update (soft delete)
-        QuoteItem::where('quote_id', $quote->id)
-            ->whereNotIn('id', $existingItemIds)
-            ->delete();
     }
 
     /**

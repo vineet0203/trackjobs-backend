@@ -13,23 +13,3 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: bash /var/www/Trakjobs-backend/deploy.sh
-
-      - name: Notify on failure
-        if: failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "❌ Backend Deploy Failed!"
-          to: ajinkyamhetre01@gmail.com
-          from: ${{ secrets.MAIL_USERNAME }}
-          body: |
-            Backend deployment failed!
-            
-            Repo: trackjobs-backend
-            Branch: ${{ github.ref_name }}
-            Commit: ${{ github.sha }}
-            
-            Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

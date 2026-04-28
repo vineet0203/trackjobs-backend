@@ -21,8 +21,11 @@ class QuoteObserver
      */
     public function updated(Quote $quote): void
     {
-        // Check if the quote was just accepted
-        $this->checkAndCreateJob($quote);
+        try {
+            $this->checkAndCreateJob($quote);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Observer failed silently", ["error" => $e->getMessage()]);
+        }
     }
 
     /**
@@ -73,6 +76,11 @@ class QuoteObserver
             'status' => $quote->status,
             'triggered_by' => 'observer'
         ]);
+
+        // Skip auto-convert if no vendor_id (customer context)
+        if (!$quote->vendor_id) {
+            return;
+        }
 
         try {
             // Create work order from quote

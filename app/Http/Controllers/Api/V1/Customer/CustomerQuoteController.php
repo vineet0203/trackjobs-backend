@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Customer;
 
 use App\Http\Controllers\Api\V1\BaseController;
+use App\Http\Requests\Api\V1\Customers\CustomerQuoteApprovalRequest;
 use App\Http\Requests\Api\V1\Customers\CustomerQuoteDecisionRequest;
 use App\Http\Resources\Api\V1\Quote\QuoteCollection;
 use App\Http\Resources\Api\V1\Quote\QuoteResource;
@@ -15,24 +16,13 @@ class CustomerQuoteController extends BaseController
     public function index(): JsonResponse
     {
         $customer = $this->getAuthenticatedCustomer();
+        $this->syncCustomerQuotes($customer);
 
         $quotes = Quote::query()
             ->with(['items'])
-            ->where(function ($query) use ($customer) {
-                $query->where('customer_id', $customer->id)
-                    ->orWhere(function ($subQuery) use ($customer) {
-                        $subQuery->whereNull('customer_id')
-                            ->where('client_email', $customer->email);
-                    });
-            })
+            ->where('customer_id', $customer->id)
             ->latest('id')
             ->paginate(15);
-
-        // Backfill relation progressively for legacy quotes mapped by email.
-        Quote::query()
-            ->whereNull('customer_id')
-            ->where('client_email', $customer->email)
-            ->update(['customer_id' => $customer->id]);
 
         return $this->successResponse(
             new QuoteCollection($quotes),
@@ -43,29 +33,55 @@ class CustomerQuoteController extends BaseController
     public function show(int $id): JsonResponse
     {
         $customer = $this->getAuthenticatedCustomer();
+        $this->syncCustomerQuotes($customer);
 
         $quote = Quote::query()
-            ->with(['items'])
+            ->with(['items', 'reminders'])
             ->where('id', $id)
-            ->where(function ($query) use ($customer) {
-                $query->where('customer_id', $customer->id)
-                    ->orWhere(function ($subQuery) use ($customer) {
-                        $subQuery->whereNull('customer_id')
-                            ->where('client_email', $customer->email);
-                    });
-            })
+            ->where('customer_id', $customer->id)
             ->first();
 
         if (!$quote) {
             return $this->notFoundResponse('Quote not found.');
         }
 
-        if (!$quote->customer_id) {
-            $quote->customer_id = $customer->id;
-            $quote->save();
+        $resource = new QuoteResource($quote);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Customer quote retrieved successfully.',
+            'data' => $resource->toArray(request()),
+            'timestamp' => now()->toIso8601String(),
+            'code' => 200,
+        ]);
+    }
+
+    public function updateApproval(int $id, CustomerQuoteApprovalRequest $request): JsonResponse
+    {
+        $customer = $this->getAuthenticatedCustomer();
+        $this->syncCustomerQuotes($customer);
+
+        $quote = $this->findCustomerQuote($id, $customer);
+        if (!$quote) {
+            return $this->notFoundResponse('Quote not found.');
         }
 
-        return $this->successResponse(new QuoteResource($quote), 'Customer quote retrieved successfully.');
+        $action = strtolower($request->validated()['action']);
+        $quote->approval_status = $action === 'accepted' ? 'accepted' : 'rejected';
+        $quote->approval_date = now();
+        $quote->approval_action_date = now();
+        $quote->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Client approval updated successfully.',
+            'data' => [
+                'id' => $quote->id,
+                'approval_status' => $quote->approval_status,
+            ],
+            'timestamp' => now()->toIso8601String(),
+            'code' => 200,
+        ]);
     }
 
     public function decide(int $id, CustomerQuoteDecisionRequest $request): JsonResponse
@@ -77,13 +93,13 @@ class CustomerQuoteController extends BaseController
     {
         $validated = $request->validated();
         $validated['action'] = 'submit';
-
         return $this->handleDecision($id, $validated);
     }
 
     private function handleDecision(int $id, array $validated): JsonResponse
     {
         $customer = $this->getAuthenticatedCustomer();
+        $this->syncCustomerQuotes($customer);
         $quote = $this->findCustomerQuote($id, $customer);
 
         if (!$quote) {
@@ -92,37 +108,16 @@ class CustomerQuoteController extends BaseController
 
         $action = $validated['action'] ?? null;
         if (!$action) {
-            return $this->validationErrorResponse([
-                'action' => ['The action field is required.'],
-            ]);
-        }
-
-        if (!$quote->customer_id) {
-            $quote->customer_id = $customer->id;
-        }
-
-        if (isset($validated['approved_price'])) {
-            $quote->customer_approved_price = $validated['approved_price'];
-        }
-
-        if (!empty($validated['signature'])) {
-            $quote->customer_signature = $validated['signature'];
-            $quote->client_signature = $validated['signature'];
-        }
-
-        if (!empty($validated['notes'])) {
-            $quote->notes = trim(($quote->notes ? $quote->notes . PHP_EOL : '') . $validated['notes']);
+            return $this->validationErrorResponse(['action' => ['The action field is required.']]);
         }
 
         if ($action === 'approve' || $action === 'submit') {
-            $quote->status = 'approved';
             $quote->approval_status = 'accepted';
             $quote->approval_action_date = now();
             $quote->approval_date = now();
         }
 
         if ($action === 'reject') {
-            $quote->status = 'rejected';
             $quote->approval_status = 'rejected';
             $quote->approval_action_date = now();
             $quote->approval_date = now();
@@ -152,13 +147,15 @@ class CustomerQuoteController extends BaseController
     {
         return Quote::query()
             ->where('id', $quoteId)
-            ->where(function ($query) use ($customer) {
-                $query->where('customer_id', $customer->id)
-                    ->orWhere(function ($subQuery) use ($customer) {
-                        $subQuery->whereNull('customer_id')
-                            ->where('client_email', $customer->email);
-                    });
-            })
+            ->where('customer_id', $customer->id)
             ->first();
+    }
+
+    private function syncCustomerQuotes(Customer $customer): void
+    {
+        Quote::query()
+            ->whereNull('customer_id')
+            ->where('client_email', $customer->email)
+            ->update(['customer_id' => $customer->id]);
     }
 }

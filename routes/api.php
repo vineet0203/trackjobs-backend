@@ -107,6 +107,7 @@ Route::middleware(['customer.jwt'])->prefix('customer')->group(function () {
     Route::get('me', [CustomerAuthController::class, 'me']);
     Route::get('quotes', [CustomerQuoteController::class, 'index']);
     Route::get('quotes/{id}', [CustomerQuoteController::class, 'show']);
+    Route::patch('quotes/{id}/approval', [CustomerQuoteController::class, 'updateApproval']);
     Route::post('quotes/{id}/decision', [CustomerQuoteController::class, 'decide']);
     Route::post('quotes/{id}/submit', [CustomerQuoteController::class, 'submit']);
 

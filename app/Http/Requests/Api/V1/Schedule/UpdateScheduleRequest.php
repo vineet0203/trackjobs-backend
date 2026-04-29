@@ -43,6 +43,7 @@ class UpdateScheduleRequest extends FormRequest
             'priority' => ['sometimes', Rule::in(['normal', 'high', 'emergency'])],
             'status' => ['sometimes', Rule::in(['draft', 'scheduled', 'completed', 'cancelled'])],
             'notes' => 'nullable|string|max:2000',
+            'address' => 'nullable|string|max:500',
 
             // Options
             'is_multi_day' => 'nullable|boolean',

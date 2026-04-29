@@ -49,7 +49,7 @@ class JobResource extends JsonResource
             }),
             'latest_assignment' => $this->whenLoaded('assignments', function () {
                 $latest = $this->assignments->sortByDesc('created_at')->first();
-                if ($latest && $latest->relationLoaded('employee') && $latest->employee) {
+                if ($latest && $latest->employee) {
                     return [
                         'id' => $latest->id,
                         'employee_id' => $latest->employee->id,

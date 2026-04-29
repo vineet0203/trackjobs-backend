@@ -19,6 +19,7 @@ class UpdateQuoteRequest extends FormRequest
         return [
             // Section 1: Quote Details
             'title' => 'sometimes|string|max:255',
+            'quote_due_date' => 'sometimes|nullable|date',
             'client_id' => 'sometimes|exists:clients,id',
             'customer_id' => 'sometimes|exists:clients,id',
             'client_name' => 'sometimes|string|max:191',

@@ -16,6 +16,7 @@ class CustomerQuoteApprovalRequest extends FormRequest
     {
         return [
             'action' => ['required', Rule::in(['Accepted', 'Rejected', 'accepted', 'rejected'])],
+            'customer_signature' => ['nullable', 'string'],
         ];
     }
 }

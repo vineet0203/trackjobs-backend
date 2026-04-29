@@ -86,6 +86,7 @@ class QuoteResource extends JsonResource
             
             // Meta
             'notes' => $this->notes,
+            'quote_due_date' => $this->quote_due_date?->format('Y-m-d'),
             'can_edit' => $this->canBeEdited(),
             'can_send' => $this->canBeSent(),
             'can_convert' => $this->canBeConverted(),

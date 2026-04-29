@@ -43,6 +43,7 @@ class CreateScheduleRequest extends FormRequest
             'priority' => ['required', Rule::in(['normal', 'high', 'emergency'])],
             'status' => ['nullable', Rule::in(['draft', 'scheduled', 'completed', 'cancelled'])],
             'notes' => 'nullable|string|max:2000',
+            'address' => 'nullable|string|max:500',
 
             // Options
             'is_multi_day' => 'nullable|boolean',

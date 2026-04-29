@@ -7,6 +7,7 @@ use App\Models\Quote;
 use App\Models\QuoteItem;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Models\CustomerNotification;
 
 class QuoteCreationService
 {
@@ -218,6 +219,25 @@ class QuoteCreationService
             'client_email' => $quote->client_email,
             'sent_by' => $sentBy,
         ]);
+
+        // Notify customer on quote send — match by email since clients and customers are separate tables
+        try {
+            $fresh = $quote->fresh();
+            if ($fresh && $fresh->client_email) {
+                $customer = \App\Models\Customer::where('email', $fresh->client_email)->first();
+                if ($customer) {
+                    CustomerNotification::create([
+                        'customer_id' => $customer->id,
+                        'type'        => 'quote_sent',
+                        'title'       => 'New Quote Received',
+                        'message'     => 'Quote #' . $fresh->quote_number . ' - ' . $fresh->title . ' has been sent for your approval.',
+                        'data'        => ['quote_id' => $fresh->id],
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('Customer notification failed: ' . $e->getMessage());
+        }
 
         return $quote->fresh();
     }

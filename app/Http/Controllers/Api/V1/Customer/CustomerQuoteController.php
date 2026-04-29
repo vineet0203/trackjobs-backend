@@ -9,6 +9,7 @@ use App\Http\Resources\Api\V1\Quote\QuoteCollection;
 use App\Http\Resources\Api\V1\Quote\QuoteResource;
 use App\Models\Customer;
 use App\Models\Quote;
+use App\Models\CustomerNotification;
 use Illuminate\Http\JsonResponse;
 
 class CustomerQuoteController extends BaseController
@@ -68,8 +69,12 @@ class CustomerQuoteController extends BaseController
 
         $action = strtolower($request->validated()['action']);
         $quote->approval_status = $action === 'accepted' ? 'accepted' : 'rejected';
+        $quote->status = $action === 'accepted' ? 'approved' : 'rejected';
         $quote->approval_date = now();
         $quote->approval_action_date = now();
+        if (!empty($request->validated()['customer_signature'])) {
+            $quote->customer_signature = $request->validated()['customer_signature'];
+        }
         $quote->save();
 
         return response()->json([
@@ -78,6 +83,7 @@ class CustomerQuoteController extends BaseController
             'data' => [
                 'id' => $quote->id,
                 'approval_status' => $quote->approval_status,
+                'customer_signature' => $quote->customer_signature,
             ],
             'timestamp' => now()->toIso8601String(),
             'code' => 200,

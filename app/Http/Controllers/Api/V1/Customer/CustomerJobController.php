@@ -14,7 +14,12 @@ class CustomerJobController extends BaseController
         $customer = $this->getAuthenticatedCustomer();
 
         $jobs = Job::query()
-            ->with(['quote:id,job_id,customer_id,client_email'])
+            ->with([
+                'quote',
+                'client',
+                'tasks',
+                'attachments'
+            ])
             ->where(function ($query) use ($customer) {
                 $query->where('customer_id', $customer->id)
                     ->orWhereHas('quote', function ($quoteQuery) use ($customer) {
@@ -25,8 +30,22 @@ class CustomerJobController extends BaseController
             ->latest('id')
             ->paginate(15);
 
+        // Map using JobResource and include schedules manually if needed or just return standard
+        $data = $jobs->map(function ($job) {
+            $resource = (new \App\Http\Resources\Api\V1\Job\JobResource($job))->resolve();
+            $resource['schedules'] = $job->schedules ? $job->schedules->map(fn($s) => [
+                'id' => $s->id,
+                'schedule_date' => $s->schedule_date ? $s->schedule_date->format('Y-m-d') : ($s->start_datetime ? $s->start_datetime->format('Y-m-d') : null),
+                'start_time' => $s->start_time ?: ($s->start_datetime ? $s->start_datetime->format('H:i') : null),
+                'end_time' => $s->end_time ?: ($s->end_datetime ? $s->end_datetime->format('H:i') : null),
+                'location' => $s->address ?: null,
+                'status' => $s->status,
+            ])->values() : [];
+            return $resource;
+        });
+
         return $this->successResponse([
-            'data' => $jobs->map(fn (Job $job) => $this->transformJob($job))->values(),
+            'data' => $data,
             'meta' => [
                 'current_page' => $jobs->currentPage(),
                 'last_page' => $jobs->lastPage(),
@@ -42,8 +61,13 @@ class CustomerJobController extends BaseController
 
         $job = Job::query()
             ->with([
-                'quote:id,job_id,customer_id,client_email',
-                'schedules:id,job_id,schedule_date,start_time,end_time,address,status',
+                'quote',
+                'client',
+                'tasks',
+                'attachments',
+                'schedules',
+                'assignedTo',
+                'assignments.employee'
             ])
             ->where('id', $id)
             ->where(function ($query) use ($customer) {
@@ -59,67 +83,26 @@ class CustomerJobController extends BaseController
             return $this->notFoundResponse('Job not found.');
         }
 
-        return $this->successResponse($this->transformJob($job, true), 'Customer job retrieved successfully.');
+        $resource = (new \App\Http\Resources\Api\V1\Job\JobResource($job))->resolve();
+        $resource['schedules'] = $job->schedules ? $job->schedules->map(fn($s) => [
+            'id' => $s->id,
+            'schedule_date' => $s->schedule_date ? $s->schedule_date->format('Y-m-d') : ($s->start_datetime ? $s->start_datetime->format('Y-m-d') : null),
+            'start_time' => $s->start_time ?: ($s->start_datetime ? $s->start_datetime->format('H:i') : null),
+            'end_time' => $s->end_time ?: ($s->end_datetime ? $s->end_datetime->format('H:i') : null),
+            'location' => $s->address ?: null,
+            'status' => $s->status,
+        ])->values() : [];
+        
+        // Ensure readonly flags
+        $resource['can_edit'] = false;
+        $resource['can_delete'] = false;
+
+        return $this->successResponse($resource, 'Customer job retrieved successfully.');
     }
 
     private function getAuthenticatedCustomer(): Customer
     {
         $customerData = request()->attributes->get('customer');
         return Customer::findOrFail((int) $customerData['id']);
-    }
-
-    private function transformJob(Job $job, bool $withSchedules = false): array
-    {
-        $payload = [
-            'id' => $job->id,
-            'job_number' => $job->job_number,
-            'title' => $job->title,
-            'description' => $job->description,
-            'status' => $job->status,
-            'priority' => $job->priority,
-            'issue_date' => optional($job->issue_date)->format('Y-m-d'),
-            'start_date' => optional($job->start_date)->format('Y-m-d'),
-            'end_date' => optional($job->end_date)->format('Y-m-d'),
-            'location' => [
-                'type' => $job->location_type,
-                'address_line_1' => $job->address_line_1,
-                'address_line_2' => $job->address_line_2,
-                'city' => $job->city,
-                'state' => $job->state,
-                'country' => $job->country,
-                'zip_code' => $job->zip_code,
-                'full_address' => implode(', ', array_filter([
-                    $job->address_line_1,
-                    $job->address_line_2,
-                    $job->city,
-                    $job->state,
-                    $job->country,
-                    $job->zip_code,
-                ])),
-            ],
-            'job_rate' => [
-                'currency' => $job->currency,
-                'amount' => (float) ($job->estimated_amount ?: $job->total_amount),
-                'formatted' => $job->currency . ' ' . number_format((float) ($job->estimated_amount ?: $job->total_amount), 2),
-            ],
-            'total_amount' => (float) $job->total_amount,
-            'paid_amount' => (float) $job->paid_amount,
-            'balance_due' => (float) $job->balance_due,
-            'can_edit' => false,
-            'can_delete' => false,
-        ];
-
-        if ($withSchedules) {
-            $payload['schedules'] = $job->schedules->map(fn ($schedule) => [
-                'id' => $schedule->id,
-                'schedule_date' => optional($schedule->schedule_date)->format('Y-m-d'),
-                'start_time' => $schedule->start_time,
-                'end_time' => $schedule->end_time,
-                'location' => $schedule->address,
-                'status' => $schedule->status,
-            ])->values();
-        }
-
-        return $payload;
     }
 }

@@ -17,6 +17,7 @@ class CreateQuoteRequest extends FormRequest
         return [
             // Section 1: Quote Details
             'title' => 'required|string|max:255',
+            'quote_due_date' => 'sometimes|nullable|date',
             'client_id' => 'required|exists:clients,id',
             'customer_id' => 'sometimes|exists:clients,id',
             'status' => 'sometimes|in:draft,sent,pending,accepted,rejected,expired',

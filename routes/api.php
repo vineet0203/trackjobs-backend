@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\Client\ClientController;
 use App\Http\Controllers\Api\V1\Client\ClientAvailabilityController; // NEW: Add this line
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Customer\CustomerAuthController;
+use App\Http\Controllers\Api\V1\Customer\CustomerNotificationController;
 use App\Http\Controllers\Api\V1\Customer\CustomerJobController;
 use App\Http\Controllers\Api\V1\Customer\CustomerQuoteController;
 use App\Http\Controllers\Api\V1\Customer\CustomerController;
@@ -105,6 +106,10 @@ Route::middleware(['employee.jwt'])->prefix('employee')->group(function () {
 
 Route::middleware(['customer.jwt'])->prefix('customer')->group(function () {
     Route::get('me', [CustomerAuthController::class, 'me']);
+    Route::get('notifications', [CustomerNotificationController::class, 'index']);
+    Route::post('notifications/{id}/read', [CustomerNotificationController::class, 'markRead']);
+    Route::post('notifications/read-all', [CustomerNotificationController::class, 'markAllRead']);
+    Route::post('profile/photo', [CustomerAuthController::class, 'uploadProfilePhoto']);
     Route::get('quotes', [CustomerQuoteController::class, 'index']);
     Route::get('quotes/{id}', [CustomerQuoteController::class, 'show']);
     Route::patch('quotes/{id}/approval', [CustomerQuoteController::class, 'updateApproval']);

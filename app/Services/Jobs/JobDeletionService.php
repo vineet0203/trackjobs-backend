@@ -60,14 +60,25 @@ class JobDeletionService
         // Delete associated files first
         foreach ($Job->attachments as $attachment) {
             // Delete file from storage
-            Storage::disk($attachment->disk)->delete($attachment->file_path);
+            if ($attachment->file_path) {
+                Storage::disk($attachment->disk)->delete($attachment->file_path);
+            }
             $attachment->forceDelete();
         }
 
-        // Delete tasks and activities
+        // Delete related records without cascade
         $Job->tasks()->forceDelete();
         $Job->activities()->forceDelete();
         $Job->timeline()->forceDelete();
+        $Job->schedules()->forceDelete();
+        $Job->assignments()->forceDelete();
+        
+        if (method_exists($Job, 'timeEntries')) {
+            $Job->timeEntries()->forceDelete();
+        }
+        if (method_exists($Job, 'time_entries')) {
+            $Job->time_entries()->forceDelete();
+        }
 
         // Force delete the work order
         $Job->forceDelete();

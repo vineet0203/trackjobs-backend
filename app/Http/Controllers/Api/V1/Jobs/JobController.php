@@ -462,7 +462,7 @@ class JobController extends BaseController
                 );
             }
 
-            $this->JobDeletionService->softDelete($Job, auth()->id());
+            $this->JobDeletionService->forceDelete($Job, auth()->id());
 
             Log::info('=== DELETE JOB END ===', [
                 'job_id' => $id,

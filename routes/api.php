@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Schedule\ScheduleController;
 use App\Http\Controllers\Api\V1\OptionsController;
 use App\Http\Controllers\Api\V1\Onboarding\OnboardingController;
 use App\Http\Controllers\Api\V1\Invoices\InvoiceController;
+use App\Http\Controllers\Api\V1\AI\AIQuoteController;
 use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -141,6 +142,16 @@ Route::middleware(['jwt.verify'])->group(function () {
         Route::get('/customers', [OnlineBookingOptionsController::class, 'customers']);
         Route::get('/employees', [OnlineBookingOptionsController::class, 'employees']);
         Route::get('/locations', [OnlineBookingOptionsController::class, 'locations']);
+    });
+
+    // ============================================
+    // AI ROUTES
+    // ============================================
+    Route::prefix('ai')->group(function () {
+        Route::post('/generate-quote', [AIQuoteController::class, 'generateQuote']);
+        Route::post('/analyze-intent', [AIQuoteController::class, 'analyzeIntent']);
+        Route::post('/generate-quote-conversational', [AIQuoteController::class, 'generateConversational']);
+        Route::post('/generate-line-items', [AIQuoteController::class, 'generateLineItems']);
     });
 
     // ============================================

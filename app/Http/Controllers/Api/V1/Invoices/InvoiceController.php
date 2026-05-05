@@ -32,7 +32,7 @@ class InvoiceController extends BaseController
 
         $perPage = (int) $request->input('per_page', 15);
 
-        $query = Invoice::with(['employee', 'items'])
+        $query = Invoice::with(['employee', 'client', 'items'])
             ->whereHas('employee', function ($employeeQuery) use ($user) {
                 $employeeQuery->where('vendor_id', $user->vendor_id);
             })
@@ -64,6 +64,7 @@ class InvoiceController extends BaseController
 
         $validator = Validator::make($request->all(), [
             'employee_id' => 'required|exists:employees,id',
+            'client_id' => 'nullable|exists:clients,id',
             'bill_date' => 'required|date',
             'delivery_date' => 'nullable|date',
             'payment_deadline' => 'nullable|date',
@@ -113,6 +114,7 @@ class InvoiceController extends BaseController
         $invoice = DB::transaction(function () use ($validated) {
             $invoice = Invoice::create([
                 'employee_id' => $validated['employee_id'],
+                'client_id' => $validated['client_id'] ?? null,
                 'bill_date' => $validated['bill_date'],
                 'delivery_date' => $validated['delivery_date'] ?? null,
                 'payment_deadline' => $validated['payment_deadline'] ?? null,
@@ -148,7 +150,7 @@ class InvoiceController extends BaseController
             return $invoice;
         });
 
-        $invoice->load(['employee', 'items']);
+        $invoice->load(['employee', 'client', 'items']);
 
         return $this->createdResponse(new InvoiceResource($invoice), 'Invoice created successfully.');
     }
@@ -164,7 +166,7 @@ class InvoiceController extends BaseController
             return $this->forbiddenResponse('You do not have permission to view invoices.');
         }
 
-        $invoice = Invoice::with(['employee', 'items'])
+        $invoice = Invoice::with(['employee', 'client', 'items'])
             ->where('id', $id)
             ->whereHas('employee', function ($employeeQuery) use ($user) {
                 $employeeQuery->where('vendor_id', $user->vendor_id);
@@ -189,7 +191,7 @@ class InvoiceController extends BaseController
             return $this->forbiddenResponse('You do not have permission to edit invoices.');
         }
 
-        $invoice = Invoice::with(['employee', 'items'])
+        $invoice = Invoice::with(['employee', 'client', 'items'])
             ->where('id', $id)
             ->whereHas('employee', function ($employeeQuery) use ($user) {
                 $employeeQuery->where('vendor_id', $user->vendor_id);
@@ -202,6 +204,7 @@ class InvoiceController extends BaseController
 
         $validator = Validator::make($request->all(), [
             'employee_id' => 'sometimes|exists:employees,id',
+            'client_id' => 'nullable|exists:clients,id',
             'bill_date' => 'sometimes|date',
             'delivery_date' => 'nullable|date',
             'payment_deadline' => 'nullable|date',
@@ -255,6 +258,7 @@ class InvoiceController extends BaseController
         $invoice = DB::transaction(function () use ($invoice, $validated) {
             $invoice->update([
                 'employee_id' => $validated['employee_id'] ?? $invoice->employee_id,
+                'client_id' => array_key_exists('client_id', $validated) ? $validated['client_id'] : $invoice->client_id,
                 'bill_date' => $validated['bill_date'] ?? $invoice->bill_date,
                 'delivery_date' => array_key_exists('delivery_date', $validated) ? $validated['delivery_date'] : $invoice->delivery_date,
                 'payment_deadline' => array_key_exists('payment_deadline', $validated) ? $validated['payment_deadline'] : $invoice->payment_deadline,
@@ -293,7 +297,7 @@ class InvoiceController extends BaseController
             return $invoice;
         });
 
-        $invoice->load(['employee', 'items']);
+        $invoice->load(['employee', 'client', 'items']);
 
         return $this->successResponse(new InvoiceResource($invoice), 'Invoice updated successfully.');
     }

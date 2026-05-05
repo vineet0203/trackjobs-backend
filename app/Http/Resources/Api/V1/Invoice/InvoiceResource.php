@@ -49,6 +49,17 @@ class InvoiceResource extends JsonResource
                 'address' => $employee->address,
                 'profile_photo' => $employee->profile_photo_path,
             ] : null,
+            'client' => $this->whenLoaded('client') ? [
+                'id' => $this->client->id,
+                'name' => $this->client->business_name ?? trim($this->client->first_name . ' ' . $this->client->last_name),
+                'email' => $this->client->email,
+                'phone' => $this->client->mobile_number,
+                'address' => trim(implode(', ', array_filter([
+                    $this->client->address_line_1,
+                    $this->client->city,
+                    $this->client->state,
+                ]))),
+            ] : null,
             'items' => InvoiceItemResource::collection($this->whenLoaded('items')),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

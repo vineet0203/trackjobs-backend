@@ -32,6 +32,9 @@ class InvoiceResource extends JsonResource
             'terms_conditions' => $this->terms_conditions,
             'billing_address' => $this->billing_address,
             'status' => $this->status,
+            'customer_id' => $this->customer_id,
+            'customer_status' => $this->customer_status,
+            'reject_reason' => $this->reject_reason,
             'totals' => [
                 'subtotal' => round($subtotal, 2),
                 'mileage' => round($mileage, 2),

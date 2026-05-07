@@ -22,6 +22,9 @@ class Invoice extends Model
         'terms_conditions',
         'billing_address',
         'status',
+        'customer_id',
+        'customer_status',
+        'reject_reason',
     ];
     protected $casts = [
         'bill_date' => 'date',
@@ -72,5 +75,9 @@ class Invoice extends Model
     public function publicLinks(): HasMany
     {
         return $this->hasMany(InvoicePublicLink::class);
+    }
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
     }
 }

@@ -377,6 +377,14 @@ class InvoiceController extends BaseController
 
         $publicUrl = rtrim(config('app.url'), '/') . '/invoice/public/' . $publicLink->token;
 
+        $customer = \App\Models\Customer::where('email', $email)->first();
+        if ($customer) {
+            $invoice->customer_id = $customer->id;
+        }
+        $invoice->status = 'sent';
+        $invoice->customer_status = null;
+        $invoice->save();
+
         Notification::route('mail', $email)->notify(
             new InvoicePublicLinkNotification(
                 $invoice,

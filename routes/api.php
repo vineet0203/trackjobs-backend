@@ -119,6 +119,12 @@ Route::middleware(['customer.jwt'])->prefix('customer')->group(function () {
 
     Route::get('jobs', [CustomerJobController::class, 'index']);
     Route::get('jobs/{id}', [CustomerJobController::class, 'show']);
+
+    Route::prefix('invoices')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\V1\Customer\CustomerInvoiceController::class, 'index']);
+        Route::get('/{id}', [\App\Http\Controllers\Api\V1\Customer\CustomerInvoiceController::class, 'show']);
+        Route::patch('/{id}/status', [\App\Http\Controllers\Api\V1\Customer\CustomerInvoiceController::class, 'updateStatus']);
+    });
 });
 
 // ============================================

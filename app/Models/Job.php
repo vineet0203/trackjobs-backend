@@ -277,4 +277,9 @@ class Job extends BaseModel
         return $query->whereIn('status', ['pending', 'scheduled', 'in_progress'])
             ->where('estimated_completion_date', '<', now()->toDateString());
     }
+
+    public function invoiceItem()
+    {
+        return $this->hasOne(InvoiceItem::class, 'job_id');
+    }
 }

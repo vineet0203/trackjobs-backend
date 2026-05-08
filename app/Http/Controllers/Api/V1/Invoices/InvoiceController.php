@@ -100,13 +100,16 @@ class InvoiceController extends BaseController
 
         foreach ($validated['items'] as $item) {
             if (!empty($item['job_id'])) {
-                $jobBelongsToVendor = DB::table('jobs')
-                    ->where('id', $item['job_id'])
+                $job = \App\Models\Job::where('id', $item['job_id'])
                     ->where('vendor_id', $user->vendor_id)
-                    ->exists();
+                    ->first();
 
-                if (!$jobBelongsToVendor) {
+                if (!$job) {
                     return $this->errorResponse('One or more jobs do not belong to your vendor.', 422);
+                }
+
+                if ($job->invoiceItem()->exists()) {
+                    return $this->errorResponse("Invoice already exists for Job: {$job->job_number}", 422);
                 }
             }
         }
@@ -323,7 +326,11 @@ class InvoiceController extends BaseController
             return $this->notFoundResponse('Invoice not found.');
         }
 
-        $invoice->delete();
+        DB::transaction(function () use ($invoice) {
+            $invoice->items()->delete();
+            $invoice->publicLinks()->delete();
+            $invoice->delete();
+        });
 
         return $this->successResponse(null, 'Invoice deleted successfully.');
     }

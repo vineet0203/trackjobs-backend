@@ -22,7 +22,8 @@ class JobQueryService
             'assignedTo',
             'assignments.employee',
             'createdBy',
-            'updatedBy'
+            'updatedBy',
+            'invoiceItem'
         ]);
 
         // Apply vendor_id filter (from authenticated user)

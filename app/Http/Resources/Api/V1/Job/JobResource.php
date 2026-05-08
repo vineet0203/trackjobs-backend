@@ -138,6 +138,7 @@ class JobResource extends JsonResource
             ],
 
             // Timestamps
+            'is_invoiced' => $this->relationLoaded('invoiceItem') ? !!$this->invoiceItem : $this->invoiceItem()->exists(),
             'created_at' => $this->created_at?->format('M d, Y H:i'),
             'updated_at' => $this->updated_at?->format('M d, Y H:i'),
             'deleted_at' => $this->deleted_at?->format('M d, Y H:i'),

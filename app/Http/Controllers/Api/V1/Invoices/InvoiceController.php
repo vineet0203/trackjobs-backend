@@ -100,7 +100,9 @@ class InvoiceController extends BaseController
 
         foreach ($validated['items'] as $item) {
             if (!empty($item['job_id'])) {
-                $job = \App\Models\Job::where('id', $item['job_id'])
+                // Check if job exists and belongs to vendor
+                $job = DB::table('jobs')
+                    ->where('id', $item['job_id'])
                     ->where('vendor_id', $user->vendor_id)
                     ->first();
 
@@ -108,7 +110,13 @@ class InvoiceController extends BaseController
                     return $this->errorResponse('One or more jobs do not belong to your vendor.', 422);
                 }
 
-                if ($job->invoiceItem()->exists()) {
+                // Check if an invoice already exists for this job (Direct DB check for production stability)
+                $alreadyInvoiced = DB::table('invoice_items')
+                    ->join('invoices', 'invoices.id', '=', 'invoice_items.invoice_id')
+                    ->where('invoice_items.job_id', $item['job_id'])
+                    ->exists();
+
+                if ($alreadyInvoiced) {
                     return $this->errorResponse("Invoice already exists for Job: {$job->job_number}", 422);
                 }
             }

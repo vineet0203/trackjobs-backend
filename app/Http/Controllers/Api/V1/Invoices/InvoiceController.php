@@ -70,7 +70,6 @@ class InvoiceController extends BaseController
             'payment_deadline' => 'nullable|date',
             'mileage' => 'nullable|numeric|min:0',
             'other_expense' => 'nullable|numeric|min:0',
-            'vat' => 'nullable|numeric|min:0',
             'note' => 'nullable|string',
             'terms_conditions' => 'nullable|string',
             'billing_address' => 'nullable|array',
@@ -81,7 +80,6 @@ class InvoiceController extends BaseController
             'items.*.mileage' => 'nullable|numeric|min:0',
             'items.*.other_expense' => 'nullable|numeric|min:0',
             'items.*.amount' => 'required|numeric|min:0',
-            'items.*.vat' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -131,7 +129,6 @@ class InvoiceController extends BaseController
                 'payment_deadline' => $validated['payment_deadline'] ?? null,
                 'mileage' => $validated['mileage'] ?? 0,
                 'other_expense' => $validated['other_expense'] ?? 0,
-                'vat' => $validated['vat'] ?? 0,
                 'note' => $validated['note'] ?? null,
                 'terms_conditions' => $validated['terms_conditions'] ?? null,
                 'billing_address' => $validated['billing_address'] ?? null,
@@ -142,8 +139,6 @@ class InvoiceController extends BaseController
                 $amount = round((float) ($item['amount'] ?? 0), 2);
                 $mileage = round((float) ($item['mileage'] ?? 0), 2);
                 $otherExpense = round((float) ($item['other_expense'] ?? 0), 2);
-                $vat = round((float) ($item['vat'] ?? 0), 2);
-                $vatValue = round(($amount * $vat) / 100, 2);
 
                 return [
                     'job_id' => $item['job_id'] ?? null,
@@ -151,8 +146,7 @@ class InvoiceController extends BaseController
                     'mileage' => $mileage,
                     'other_expense' => $otherExpense,
                     'amount' => $amount,
-                    'vat' => $vat,
-                    'final_amount' => round($amount + $mileage + $otherExpense + $vatValue, 2),
+                    'final_amount' => round($amount + $mileage + $otherExpense, 2),
                 ];
             }, $validated['items']);
 
@@ -221,7 +215,6 @@ class InvoiceController extends BaseController
             'payment_deadline' => 'nullable|date',
             'mileage' => 'nullable|numeric|min:0',
             'other_expense' => 'nullable|numeric|min:0',
-            'vat' => 'nullable|numeric|min:0',
             'note' => 'nullable|string',
             'terms_conditions' => 'nullable|string',
             'billing_address' => 'nullable|array',
@@ -232,7 +225,6 @@ class InvoiceController extends BaseController
             'items.*.mileage' => 'nullable|numeric|min:0',
             'items.*.other_expense' => 'nullable|numeric|min:0',
             'items.*.amount' => 'required_with:items|numeric|min:0',
-            'items.*.vat' => 'nullable|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -275,7 +267,6 @@ class InvoiceController extends BaseController
                 'payment_deadline' => array_key_exists('payment_deadline', $validated) ? $validated['payment_deadline'] : $invoice->payment_deadline,
                 'mileage' => $validated['mileage'] ?? $invoice->mileage,
                 'other_expense' => $validated['other_expense'] ?? $invoice->other_expense,
-                'vat' => $validated['vat'] ?? $invoice->vat,
                 'note' => array_key_exists('note', $validated) ? $validated['note'] : $invoice->note,
                 'terms_conditions' => array_key_exists('terms_conditions', $validated) ? $validated['terms_conditions'] : $invoice->terms_conditions,
                 'billing_address' => array_key_exists('billing_address', $validated) ? $validated['billing_address'] : $invoice->billing_address,
@@ -287,8 +278,6 @@ class InvoiceController extends BaseController
                     $amount = round((float) ($item['amount'] ?? 0), 2);
                     $mileage = round((float) ($item['mileage'] ?? 0), 2);
                     $otherExpense = round((float) ($item['other_expense'] ?? 0), 2);
-                    $vat = round((float) ($item['vat'] ?? 0), 2);
-                    $vatValue = round(($amount * $vat) / 100, 2);
 
                     return [
                         'job_id' => $item['job_id'] ?? null,
@@ -296,8 +285,7 @@ class InvoiceController extends BaseController
                         'mileage' => $mileage,
                         'other_expense' => $otherExpense,
                         'amount' => $amount,
-                        'vat' => $vat,
-                        'final_amount' => round($amount + $mileage + $otherExpense + $vatValue, 2),
+                        'final_amount' => round($amount + $mileage + $otherExpense, 2),
                     ];
                 }, $validated['items']);
 

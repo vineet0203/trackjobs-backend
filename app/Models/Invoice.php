@@ -17,7 +17,6 @@ class Invoice extends Model
         'payment_deadline',
         'mileage',
         'other_expense',
-        'vat',
         'note',
         'terms_conditions',
         'billing_address',
@@ -32,7 +31,6 @@ class Invoice extends Model
         'payment_deadline' => 'date',
         'mileage' => 'decimal:2',
         'other_expense' => 'decimal:2',
-        'vat' => 'decimal:2',
         'billing_address' => 'array',
     ];
     protected static function booted(): void

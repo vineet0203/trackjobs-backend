@@ -13,9 +13,6 @@ class InvoiceResource extends JsonResource
         $subtotal = (float) $items->sum('amount');
         $mileage = (float) $items->sum('mileage');
         $otherExpense = (float) $items->sum('other_expense');
-        $vatTotal = (float) $items->sum(function ($item) {
-            return round(((float) $item->amount * (float) $item->vat) / 100, 2);
-        });
         $grandTotal = (float) $items->sum('final_amount');
 
         return [
@@ -27,7 +24,6 @@ class InvoiceResource extends JsonResource
             'payment_deadline' => $this->payment_deadline?->toDateString(),
             'mileage' => (float) $this->mileage,
             'other_expense' => (float) $this->other_expense,
-            'vat' => (float) $this->vat,
             'note' => $this->note,
             'terms_conditions' => $this->terms_conditions,
             'billing_address' => $this->billing_address,
@@ -39,7 +35,6 @@ class InvoiceResource extends JsonResource
                 'subtotal' => round($subtotal, 2),
                 'mileage' => round($mileage, 2),
                 'other_expense' => round($otherExpense, 2),
-                'vat_total' => round($vatTotal, 2),
                 'grand_total' => round($grandTotal, 2),
             ],
             'employee' => $employee ? [

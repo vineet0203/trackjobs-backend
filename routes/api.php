@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Schedule\ScheduleController;
 use App\Http\Controllers\Api\V1\OptionsController;
 use App\Http\Controllers\Api\V1\Onboarding\OnboardingController;
 use App\Http\Controllers\Api\V1\Invoices\InvoiceController;
+use App\Http\Controllers\Api\V1\Reports\ReportsController;
 use App\Http\Controllers\Api\V1\AI\AIQuoteController;
 use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
@@ -330,6 +331,13 @@ Route::middleware(['jwt.verify'])->group(function () {
             Route::put('/{scheduleId}', [ClientAvailabilityController::class, 'update']);
             // Delete specific availability schedule
             Route::delete('/{scheduleId}', [ClientAvailabilityController::class, 'destroy']);
+        });
+
+        // ============================================
+        // REPORTS & ANALYTICS ROUTES
+        // ============================================
+        Route::prefix('reports')->group(function () {
+            Route::get('/overview', [ReportsController::class, 'overview']);
         });
     });
 

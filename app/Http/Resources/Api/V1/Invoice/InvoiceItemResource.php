@@ -16,7 +16,6 @@ class InvoiceItemResource extends JsonResource
             'mileage' => (float) $this->mileage,
             'other_expense' => (float) $this->other_expense,
             'amount' => (float) $this->amount,
-            'vat' => (float) $this->vat,
             'final_amount' => (float) $this->final_amount,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

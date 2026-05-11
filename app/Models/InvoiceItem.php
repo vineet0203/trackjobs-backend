@@ -19,7 +19,6 @@ class InvoiceItem extends Model
         'mileage',
         'other_expense',
         'amount',
-        'vat',
         'final_amount',
     ];
 
@@ -27,7 +26,6 @@ class InvoiceItem extends Model
         'mileage' => 'decimal:2',
         'other_expense' => 'decimal:2',
         'amount' => 'decimal:2',
-        'vat' => 'decimal:2',
         'final_amount' => 'decimal:2',
     ];
 

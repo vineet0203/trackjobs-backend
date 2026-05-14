@@ -407,3 +407,8 @@ Route::fallback(function () {
         'timestamp' => now()->toISOString()
     ], 404);
 });
+
+Route::middleware(['jwt.auth'])->group(function () {
+    Route::get('/vendors/reports/overview', [ReportsController::class, 'overview']);
+    Route::get('/vendors/reports/service-types', [ReportsController::class, 'getServiceTypes']);
+});

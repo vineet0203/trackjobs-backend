@@ -294,7 +294,7 @@ class ReportsController extends BaseController
     private function buildRecentJobs(int $vendorId): array
     {
         $jobs = Job::where('vendor_id', $vendorId)
-            ->with(['client:id,first_name,last_name,business_name,client_type'])
+            ->with(['client:id,first_name,last_name,business_name,client_type', 'assignments' => fn($q) => $q->latest()->limit(1), 'assignments.employee:id,first_name,last_name'])
             ->orderByDesc('created_at')
             ->limit(10)
             ->get();
@@ -393,7 +393,7 @@ class ReportsController extends BaseController
             ->select(
                 'employees.id',
                 DB::raw("CONCAT(employees.first_name, ' ', COALESCE(employees.last_name, '')) as name"),
-                DB::raw('COALESCE(SUM(DISTINCT time_entries.total_time), 0) as total_minutes'),
+                DB::raw('COALESCE(SUM(time_entries.total_time), 0) as total_minutes'),
                 DB::raw('COUNT(DISTINCT jobs.id) as completed_jobs')
             )
             ->groupBy('employees.id', 'employees.first_name', 'employees.last_name')

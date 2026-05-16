@@ -88,6 +88,11 @@ class Schedule extends BaseModel
         return $this->belongsTo(User::class, 'updated_by');
     }
 
+    public function jobAssignments()
+    {
+        return $this->hasMany(JobAssignment::class, 'job_id', 'job_id');
+    }
+
     /**
      * Scopes
      */

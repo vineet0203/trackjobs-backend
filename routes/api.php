@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\V1\Schedule\ScheduleController;
 use App\Http\Controllers\Api\V1\OptionsController;
 use App\Http\Controllers\Api\V1\Onboarding\OnboardingController;
 use App\Http\Controllers\Api\V1\Invoices\InvoiceController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\Reports\ReportsController;
 use App\Http\Controllers\Api\V1\AI\AIQuoteController;
 use App\Services\RequestAnalyticsService;
@@ -409,6 +410,7 @@ Route::fallback(function () {
 });
 
 Route::middleware(['jwt.auth'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/vendors/reports/overview', [ReportsController::class, 'overview']);
     Route::get('/vendors/reports/service-types', [ReportsController::class, 'getServiceTypes']);
 });

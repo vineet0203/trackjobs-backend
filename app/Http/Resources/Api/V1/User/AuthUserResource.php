@@ -49,6 +49,10 @@ class AuthUserResource extends JsonResource
                     'business_name' => $this->vendor->business_name,
                     'website_name' => $this->vendor->website_name,
                     'business_type' => $this->vendor->business_type,
+                    'service_category' => $this->vendor->service_category,
+                    'service_sub_category' => $this->vendor->service_sub_category,
+                    'service_category_custom' => $this->vendor->service_category_custom,
+                    'service_sub_category_custom' => $this->vendor->service_sub_category_custom,
                     'status' => $this->vendor->status,
                 ] : null;
             }),

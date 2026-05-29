@@ -15,6 +15,25 @@ use Illuminate\Support\Facades\Log;
 class PublicBookingController extends BaseController
 {
     /**
+     * Fetch vendors matching the requested service.
+     */
+    public function getVendors(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'service_category' => ['required', 'string', 'max:100'],
+            'service_sub_category' => ['required', 'string', 'max:100'],
+        ]);
+
+        $vendors = \App\Models\Vendor::where('status', 'active')
+            ->where('service_category', $validated['service_category'])
+            ->where('service_sub_category', $validated['service_sub_category'])
+            ->limit(5)
+            ->get(['id', 'business_name', 'email', 'mobile_number', 'service_description']);
+
+        return $this->successResponse($vendors, 'Matching vendors retrieved successfully.');
+    }
+
+    /**
      * Handle public booking submission from the landing page.
      * Matches the requested service to all suitable clients and generates a quote request.
      */
@@ -30,6 +49,11 @@ class PublicBookingController extends BaseController
             'date' => ['nullable', 'date'],
             'time' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
+            'vendor_ids' => ['required', 'array', 'min:1', 'max:5'],
+            'vendor_ids.*' => ['required', 'integer', 'exists:vendors,id'],
+            'service_name' => ['nullable', 'string', 'max:255'],
+            'unit_price' => ['nullable', 'numeric'],
+            'quantity' => ['nullable', 'integer', 'min:1'],
         ]);
 
         try {
@@ -45,22 +69,34 @@ class PublicBookingController extends BaseController
                 ]
             );
 
-            // 2. Find all Clients (subcontractors/service providers) that match the requested service
-            $matchingClients = Client::where('service_category', $validated['service_category'])
-                ->where('service_sub_category', $validated['service_sub_category'])
+            // 2. Fetch the selected vendors
+            $matchingVendors = \App\Models\Vendor::whereIn('id', $validated['vendor_ids'])
+                ->where('status', 'active')
                 ->get();
 
-            if ($matchingClients->isEmpty()) {
+            if ($matchingVendors->isEmpty()) {
                 DB::rollBack();
-                return $this->errorResponse('No service providers are currently available for this service in your area.', 404);
+                return $this->errorResponse('Selected service providers are not available.', 404);
             }
 
             $quotesCreated = 0;
 
-            // 3. Generate a Quote/Request for each matched client
-            foreach ($matchingClients as $client) {
-                // Determine vendor from client
-                $vendorId = $client->vendor_id;
+            // 3. Generate a Quote/Request for each selected vendor
+            foreach ($matchingVendors as $vendor) {
+                // Find or create Client under this vendor matching the customer
+                $client = Client::firstOrCreate(
+                    ['vendor_id' => $vendor->id, 'email' => $customer->email],
+                    [
+                        'first_name' => $customer->name,
+                        'last_name' => '',
+                        'business_name' => $customer->name,
+                        'client_type' => 'residential',
+                        'mobile_number' => $customer->phone,
+                        'status' => 'active',
+                        'created_by' => 1,
+                        'updated_by' => 1,
+                    ]
+                );
 
                 // Create the quote
                 $quote = Quote::create([
@@ -68,7 +104,7 @@ class PublicBookingController extends BaseController
                     'title' => 'New Lead: ' . str_replace('_', ' ', $validated['service_sub_category']),
                     'client_id' => $client->id,
                     'customer_id' => $customer->id,
-                    'vendor_id' => $vendorId,
+                    'vendor_id' => $vendor->id,
                     'client_name' => $customer->name,
                     'client_email' => $customer->email,
                     'status' => 'pending', // Pending provider response
@@ -77,15 +113,37 @@ class PublicBookingController extends BaseController
                     'total_amount' => 0,
                 ]);
 
+                // Create quote item if details are provided
+                if ($request->has('service_name') || $request->has('unit_price')) {
+                    $itemName = $request->input('service_name') ?? str_replace('_', ' ', $validated['service_sub_category']);
+                    $unitPrice = floatval($request->input('unit_price') ?? 0);
+                    $qty = intval($request->input('quantity') ?? 1);
+
+                    $quoteItem = new \App\Models\QuoteItem([
+                        'item_name' => $itemName,
+                        'description' => 'Requested service',
+                        'quantity' => $qty,
+                        'unit_price' => $unitPrice,
+                        'tax_rate' => 0,
+                        'tax_amount' => 0,
+                        'item_total' => $qty * $unitPrice,
+                    ]);
+                    $quote->items()->save($quoteItem);
+
+                    // Recalculate totals
+                    $quote->calculateTotals();
+                }
+
                 // Get the main user_id of the vendor to send the notification to
-                $vendorUserId = $client->vendor->user_id ?? null;
+                $vendorUser = \App\Models\User::where('vendor_id', $vendor->id)->first();
+                $vendorUserId = $vendorUser ? $vendorUser->id : null;
 
                 if ($vendorUserId) {
                     // Create a notification for the Vendor/Client
                     Notification::create([
                         'user_id' => $vendorUserId,
                         'title' => 'New Service Request',
-                        'message' => "A new booking request for {$validated['service_sub_category']} has been automatically routed to your client {$client->business_name}.",
+                        'message' => "A new booking request for {$validated['service_sub_category']} has been automatically routed to your business {$vendor->business_name}.",
                         'type' => 'booking_request',
                         'is_read' => false,
                         'data' => ['url' => "/quotes/{$quote->id}"],

@@ -614,4 +614,82 @@ class QuoteController extends BaseController
             );
         }
     }
+
+    /**
+     * Accept a quote as a vendor
+     */
+    public function accept(int $id): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
+            $quote = $this->quoteQueryService->getQuote($id);
+
+            if (!$quote || $quote->vendor_id !== $vendorId) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            $quote->update([
+                'status' => 'accepted',
+                'approval_status' => 'accepted',
+                'approval_date' => now(),
+                'approval_action_date' => now(),
+            ]);
+
+            return $this->successResponse(
+                new QuoteResource($quote),
+                'Quote accepted successfully.'
+            );
+        } catch (\Exception $e) {
+            Log::error('Quote Accept Error: ' . $e->getMessage());
+            return $this->errorResponse('Failed to accept quote.', 500);
+        }
+    }
+
+    /**
+     * Reject a quote as a vendor
+     */
+    public function reject(int $id): JsonResponse
+    {
+        try {
+            $user = auth()->user();
+            $vendorId = $user->vendor_id;
+
+            if (!$vendorId) {
+                return $this->errorResponse(
+                    'Authenticated user is not associated with a vendor.',
+                    403
+                );
+            }
+
+            $quote = $this->quoteQueryService->getQuote($id);
+
+            if (!$quote || $quote->vendor_id !== $vendorId) {
+                return $this->notFoundResponse('Quote not found.');
+            }
+
+            $quote->update([
+                'status' => 'rejected',
+                'approval_status' => 'rejected',
+                'approval_date' => now(),
+                'approval_action_date' => now(),
+            ]);
+
+            return $this->successResponse(
+                new QuoteResource($quote),
+                'Quote rejected successfully.'
+            );
+        } catch (\Exception $e) {
+            Log::error('Quote Reject Error: ' . $e->getMessage());
+            return $this->errorResponse('Failed to reject quote.', 500);
+        }
+    }
 }

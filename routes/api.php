@@ -90,6 +90,7 @@ Route::prefix('auth')->group(function () {
 // ============================================
 Route::prefix('public')->group(function () {
     Route::post('bookings', [PublicBookingController::class, 'store']);
+    Route::get('vendors', [PublicBookingController::class, 'getVendors']);
 });
 
 Route::prefix('employee')->group(function () {
@@ -279,6 +280,8 @@ Route::middleware(['jwt.verify'])->group(function () {
             Route::post('/{id}/send', [QuoteController::class, 'send']);
             Route::post('/{id}/follow-up-status', [QuoteController::class, 'updateFollowUpStatus']);
             Route::post('/{id}/convert-to-job', [QuoteController::class, 'convertToJob']);
+            Route::post('/{id}/accept', [QuoteController::class, 'accept']);
+            Route::post('/{id}/reject', [QuoteController::class, 'reject']);
         });
 
         // ============================================

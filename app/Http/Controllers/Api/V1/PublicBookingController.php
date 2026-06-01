@@ -67,7 +67,7 @@ class PublicBookingController extends BaseController
             if ($request->hasFile('images')) {
                 foreach ($request->file('images') as $file) {
                     $filename = 'quote_' . Str::random(10) . '_' . time() . '.' . $file->getClientOriginalExtension();
-                    $path = $file->storeAs('private/quotes', $filename, 'local');
+                    $path = $file->storeAs('quotes', $filename, 'public');
                     $uploadedImages[] = $path;
                 }
             }
@@ -181,7 +181,8 @@ class PublicBookingController extends BaseController
 
             return $this->successResponse([
                 'matched_providers' => $quotesCreated,
-                'customer_id' => $customer->id
+                'customer_id' => $customer->id,
+                'is_new_customer' => $customer->wasRecentlyCreated
             ], 'Booking submitted successfully. Matching service providers have been notified.', 201);
 
         } catch (\Exception $e) {

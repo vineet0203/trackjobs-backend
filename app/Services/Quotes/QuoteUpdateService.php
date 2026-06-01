@@ -42,7 +42,8 @@ class QuoteUpdateService
                 'can_convert_to_job',
                 'notes',
                 'status',
-                'expires_at'
+                'expires_at',
+                'images'
             ];
 
             $updateData = [];
@@ -89,6 +90,7 @@ class QuoteUpdateService
 
             // Auto-promote status to pending and reset approval fields if in draft/pending/rejected
             $customer = \App\Models\Customer::where('email', $quote->client_email)->first();
+            $quote->refresh();
             $quote->update([
                 'status' => 'pending',
                 'sent_at' => now(),
@@ -97,6 +99,8 @@ class QuoteUpdateService
                 'approval_action_date' => null,
                 'customer_signature' => null,
                 'customer_id' => $customer ? $customer->id : $quote->customer_id,
+                'subtotal' => $quote->subtotal,
+                'total_amount' => $quote->total_amount,
             ]);
 
             DB::commit();

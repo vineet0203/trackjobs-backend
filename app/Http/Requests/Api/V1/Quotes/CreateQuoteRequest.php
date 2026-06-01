@@ -38,7 +38,7 @@ class CreateQuoteRequest extends FormRequest
             'is_tax_applicable' => 'sometimes|boolean',
             'tax_percentage' => 'required_if:is_tax_applicable,true|integer|in:0,5,12,18,28',
             'deposit_required' => 'sometimes|boolean',
-            'deposit_type' => 'required_if:deposit_required,true|in:percentage,fixed',
+            'deposit_type' => 'nullable|in:none,percentage,fixed',
             'deposit_amount' => 'required_if:deposit_required,true|numeric|min:0',
 
             // Section 4: Client Approval

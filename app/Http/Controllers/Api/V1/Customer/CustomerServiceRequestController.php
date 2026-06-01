@@ -73,6 +73,7 @@ class CustomerServiceRequestController extends BaseController
     {
         $validated = $request->validate([
             'action' => 'required|in:accepted,rejected',
+            'customer_signature' => 'nullable|string',
         ]);
 
         $customer = $this->getAuthenticatedCustomer();
@@ -98,6 +99,9 @@ class CustomerServiceRequestController extends BaseController
         $quote->status = $action === 'accepted' ? 'approved' : 'rejected';
         $quote->approval_date = now();
         $quote->approval_action_date = now();
+        if ($action === 'accepted' && !empty($validated['customer_signature'])) {
+            $quote->customer_signature = $validated['customer_signature'];
+        }
         $quote->save();
 
         return response()->json([
@@ -107,6 +111,7 @@ class CustomerServiceRequestController extends BaseController
                 'id' => $quote->id,
                 'approval_status' => $quote->approval_status,
                 'status' => $quote->status,
+                'customer_signature' => $quote->customer_signature,
             ],
             'timestamp' => now()->toIso8601String(),
             'code' => 200,

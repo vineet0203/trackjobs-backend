@@ -1,0 +1,13 @@
+{
+  "debug": false,
+  "port": 6001,
+  "apps": [
+    {
+      "id": "1",
+      "key": "trakjobs_key",
+      "secret": "trakjobs_secret",
+      "maxConnections": -1,
+      "enableMessageBroadcasting": true
+    }
+  ]
+}

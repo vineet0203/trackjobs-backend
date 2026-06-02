@@ -45,4 +45,9 @@ class Customer extends Model implements JWTSubject
             'role' => $this->role,
         ];
     }
+
+    public function messages()
+    {
+        return $this->hasMany(Message::class);
+    }
 }

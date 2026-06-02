@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\Reports\ReportsController;
 use App\Http\Controllers\Api\V1\AI\AIQuoteController;
 use App\Http\Controllers\Api\V1\PublicBookingController;
+use App\Http\Controllers\Api\MessageController;
 use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
@@ -93,6 +94,8 @@ Route::prefix('public')->group(function () {
     Route::get('vendors', [PublicBookingController::class, 'getVendors']);
 });
 
+Route::post('/chat/auth', [MessageController::class, 'broadcastAuth']);
+
 Route::prefix('employee')->group(function () {
     Route::post('login', [EmployeeAuthController::class, 'login']);
     Route::post('set-password', [EmployeeAuthController::class, 'setPassword']);
@@ -119,6 +122,12 @@ Route::middleware(['employee.jwt'])->prefix('employee')->group(function () {
 });
 
 Route::middleware(['customer.jwt'])->prefix('customer')->group(function () {
+    // Customer Messaging routes
+    Route::get('messages', [MessageController::class, 'getCustomerConversations']);
+    Route::post('messages/send', [MessageController::class, 'sendMessage']);
+    Route::post('messages/read', [MessageController::class, 'markAsRead']);
+    Route::get('messages/unread-count', [MessageController::class, 'getUnreadCount']);
+
     Route::get('me', [CustomerAuthController::class, 'me']);
     Route::get('notifications', [CustomerNotificationController::class, 'index']);
     Route::post('notifications/{id}/read', [CustomerNotificationController::class, 'markRead']);
@@ -148,6 +157,13 @@ Route::middleware(['customer.jwt'])->prefix('customer')->group(function () {
 // PROTECTED ROUTES - REQUIRE AUTHENTICATION
 // ============================================
 Route::middleware(['jwt.verify'])->group(function () {
+
+    // Vendor Messaging routes
+    Route::get('/messages/conversations', [MessageController::class, 'getConversations']);
+    Route::get('/messages/{customerId}', [MessageController::class, 'getMessages']);
+    Route::post('/messages/send', [MessageController::class, 'sendMessage']);
+    Route::post('/messages/{customerId}/read', [MessageController::class, 'markAsRead']);
+    Route::get('/messages/unread-count', [MessageController::class, 'getUnreadCount']);
 
     Route::post('/customers', [CustomerController::class, 'store']);
     Route::post('/customers/resend-setup-link', [CustomerController::class, 'resendSetupLink']);

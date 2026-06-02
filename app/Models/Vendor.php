@@ -50,6 +50,11 @@ class Vendor extends BaseModel
         return $this->hasMany(User::class);
     }
 
+    public function messages()
+    {
+        return $this->hasMany(Message::class);
+    }
+
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');

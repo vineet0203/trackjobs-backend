@@ -1,0 +1,13 @@
+[Unit]
+Description=Soketi WebSocket Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/soketi start --config=/etc/soketi/config.json
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

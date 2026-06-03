@@ -51,6 +51,9 @@ class Quote extends BaseModel
         'updated_by',
         'converted_by',
         'images',
+        'booking_location',
+        'booking_date',
+        'booking_time',
     ];
 
     protected $casts = [

@@ -86,6 +86,9 @@ class QuoteResource extends JsonResource
             
             // Meta
             'notes' => $this->notes,
+            'booking_location' => $this->booking_location,
+            'booking_date' => $this->booking_date?->format('Y-m-d'),
+            'booking_time' => $this->booking_time,
             'quote_due_date' => $this->quote_due_date?->format('Y-m-d'),
             'can_edit' => $this->canBeEdited(),
             'can_send' => $this->canBeSent(),

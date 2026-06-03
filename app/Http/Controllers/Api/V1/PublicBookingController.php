@@ -114,7 +114,10 @@ class PublicBookingController extends BaseController
                     'client_name' => $customer->name,
                     'client_email' => $customer->email,
                     'status' => 'unassigned', // Set status to unassigned
-                    'notes' => "Location: " . ($validated['location'] ?? '') . "\nDate: " . ($validated['date'] ?? '') . "\nTime: " . ($validated['time'] ?? '') . "\nNotes: " . ($validated['notes'] ?? ''),
+                    'booking_location' => $validated['location'] ?? null,
+                    'booking_date' => $validated['date'] ?? null,
+                    'booking_time' => $validated['time'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
                     'subtotal' => 0,
                     'total_amount' => 0,
                     'images' => $uploadedImages,
@@ -168,7 +171,10 @@ class PublicBookingController extends BaseController
                         'client_name' => $customer->name,
                         'client_email' => $customer->email,
                         'status' => 'pending', // Pending provider response
-                        'notes' => "Location: " . ($validated['location'] ?? '') . "\nDate: " . ($validated['date'] ?? '') . "\nTime: " . ($validated['time'] ?? '') . "\nNotes: " . ($validated['notes'] ?? ''),
+                        'booking_location' => $validated['location'] ?? null,
+                        'booking_date' => $validated['date'] ?? null,
+                        'booking_time' => $validated['time'] ?? null,
+                        'notes' => $validated['notes'] ?? null,
                         'subtotal' => 0,
                         'total_amount' => 0,
                         'images' => $uploadedImages,

@@ -30,10 +30,14 @@ class JobAttachmentResource extends JsonResource
         // Generate signed URL for private file
         $signedUrlData = null;
         if ($this->file_path) {
-            $signedUrlData = $this->signedUrlService->generateTemporarySignedUrl(
-                $this->file_path,
-                60 // 60 minutes expiration
-            );
+            if ($this->disk === 'public') {
+                $signedUrlData = ['url' => url('storage/' . $this->file_path), 'expires_at' => null];
+            } else {
+                $signedUrlData = $this->signedUrlService->generateTemporarySignedUrl(
+                    $this->file_path,
+                    60 // 60 minutes expiration
+                );
+            }
             
             Log::info('JobAttachmentResource: Generated signed URL', [
                 'attachment_id' => $this->id,

@@ -218,8 +218,8 @@ class JobCreationService
                         'file_path' => $imagePath,
                         'file_type' => 'image',
                         'mime_type' => 'image/' . pathinfo($imagePath, PATHINFO_EXTENSION),
-                        'file_size' => \Illuminate\Support\Facades\Storage::disk('local')->exists($imagePath) ? \Illuminate\Support\Facades\Storage::disk('local')->size($imagePath) : 0,
-                        'disk' => 'local',
+                        'file_size' => \Illuminate\Support\Facades\Storage::disk('public')->exists($imagePath) ? \Illuminate\Support\Facades\Storage::disk('public')->size($imagePath) : 0,
+                        'disk' => 'public',
                         'uploaded_by' => $convertedBy,
                     ]);
                 }

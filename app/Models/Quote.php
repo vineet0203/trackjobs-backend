@@ -76,6 +76,7 @@ class Quote extends BaseModel
         'converted_at' => 'datetime',
         'quote_due_date' => 'date',
         'images' => 'array',
+        'booking_date' => 'date',
     ];
 
 

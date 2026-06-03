@@ -74,13 +74,14 @@ class QuoteUpdateService
             }
 
             // Update items if provided - check both 'items' and 'line_items'
+            $taxRate = $quote->is_tax_applicable ? $quote->tax_percentage : 0;
             if (isset($data['items'])) {
-                $this->updateQuoteItems($quote, $data['items']);
+                $this->updateQuoteItems($quote, $data['items'], $taxRate);
                 $quote->unsetRelation('items');
                 // Recalculate totals after items update
                 $quote->calculateTotals();
             } elseif (isset($data['line_items'])) {
-                $this->updateQuoteItems($quote, $data['line_items']);
+                $this->updateQuoteItems($quote, $data['line_items'], $taxRate);
                 $quote->unsetRelation('items');
                 $quote->calculateTotals();
             }
@@ -159,7 +160,7 @@ class QuoteUpdateService
     /**
      * Update quote items
      */
-    private function updateQuoteItems(Quote $quote, array $items): void
+    private function updateQuoteItems(Quote $quote, array $items, float $taxRate = 0): void
     {
         QuoteItem::where('quote_id', $quote->id)->delete();
 
@@ -170,8 +171,9 @@ class QuoteUpdateService
                 continue;
             }
 
+            $itemTaxRate = $taxRate > 0 ? $taxRate : ($item['tax_rate'] ?? 0);
             $subtotal = $item['quantity'] * $item['unit_price'];
-            $taxAmount = $subtotal * (($item['tax_rate'] ?? 0) / 100);
+            $taxAmount = $subtotal * ($itemTaxRate / 100);
 
             QuoteItem::create([
                 'quote_id' => $quote->id,
@@ -179,7 +181,7 @@ class QuoteUpdateService
                 'description' => $item['description'] ?? null,
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['unit_price'],
-                'tax_rate' => $item['tax_rate'] ?? 0,
+                'tax_rate' => $itemTaxRate,
                 'tax_amount' => $taxAmount,
                 'item_total' => $subtotal + $taxAmount,
                 'sort_order' => $sortOrder++,

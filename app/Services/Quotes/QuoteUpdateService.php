@@ -99,8 +99,7 @@ class QuoteUpdateService
                 'approval_action_date' => null,
                 'customer_signature' => null,
                 'customer_id' => $customer ? $customer->id : $quote->customer_id,
-                'subtotal' => $quote->subtotal,
-                'total_amount' => $quote->total_amount,
+
             ]);
 
             DB::commit();

@@ -184,14 +184,15 @@ class Quote extends BaseModel
      */
     public function calculateTotals(): self
     {
+        // Subtotal = sum of qty x price (before tax)
+        // Subtotal = sum of qty x price (before tax)
         $subtotal = $this->items->sum(function ($item) {
             return $item->quantity * $item->unit_price;
         });
 
+        // Total = sum of item_total (tax inclusive per item)
         $total = $this->items->sum(function ($item) {
-            $subtotal = $item->quantity * $item->unit_price;
-            $tax = $this->is_tax_applicable ? $subtotal * ($item->tax_rate / 100) : 0;
-            return $subtotal + $tax;
+            return $item->item_total;
         });
 
         $totalAmount = $total - ($this->discount ?? 0);

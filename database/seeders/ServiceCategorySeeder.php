@@ -3,7 +3,9 @@
 namespace Database\Seeders;
 
 use App\Models\ServiceCategory;
+use App\Models\ServiceSubCategory;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class ServiceCategorySeeder extends Seeder
 {
@@ -12,90 +14,85 @@ class ServiceCategorySeeder extends Seeder
      */
     public function run(): void
     {
+        // Clear existing categories and sub-categories to prevent duplicate slug issues
+        ServiceSubCategory::query()->delete();
+        ServiceCategory::query()->delete();
+
         $categories = [
             [
-                'slug' => 'home_repair',
-                'name' => 'Home Repair Services',
-                'description' => 'General home maintenance, repairs, door/window fixes, and mounting services.',
-                'icon' => 'Wrench',
+                'name' => 'Home Services',
+                'slug' => 'home-services',
+                'description' => 'Home maintenance and repair',
                 'sort_order' => 1,
+                'is_active' => true,
+                'subcategories' => [
+                    'Plumbing',
+                    'Electrical',
+                    'Cleaning',
+                    'Painting',
+                    'Pest Control',
+                    'Moving'
+                ]
             ],
             [
-                'slug' => 'electrical',
-                'name' => 'Electrical Services',
-                'description' => 'Light, fan, wiring, and appliance installations or repairs.',
-                'icon' => 'Zap',
+                'name' => 'Repair Services',
+                'slug' => 'repair-services',
+                'description' => 'All types of repair work',
                 'sort_order' => 2,
+                'is_active' => true,
+                'subcategories' => [
+                    'AC Repair',
+                    'Appliance Repair',
+                    'Furniture Repair'
+                ]
             ],
             [
-                'slug' => 'plumbing',
-                'name' => 'Plumbing Services',
-                'description' => 'Fixing leaks, toilets, taps, and water system installations.',
-                'icon' => 'Droplets',
+                'name' => 'Automotive',
+                'slug' => 'automotive',
+                'description' => 'Car and vehicle services',
                 'sort_order' => 3,
+                'is_active' => true,
+                'subcategories' => [
+                    'Car Washing',
+                    'Car Repair',
+                    'Tyre Change'
+                ]
             ],
             [
-                'slug' => 'painting_wall',
-                'name' => 'Painting & Wall Services',
-                'description' => 'Interior and exterior painting, waterproofing, and wallpapers.',
-                'icon' => 'Paintbrush',
+                'name' => 'Other Services',
+                'slug' => 'other-services',
+                'description' => 'Miscellaneous services',
                 'sort_order' => 4,
-            ],
-            [
-                'slug' => 'carpentry',
-                'name' => 'Carpentry Services',
-                'description' => 'Custom shelves, furniture repair, cabinets, and wood repair.',
-                'icon' => 'Hammer',
-                'sort_order' => 5,
-            ],
-            [
-                'slug' => 'cleaning',
-                'name' => 'Cleaning Services',
-                'description' => 'Deep home cleaning, sofas, carpets, and sanitization services.',
-                'icon' => 'Sparkles',
-                'sort_order' => 6,
-            ],
-            [
-                'slug' => 'appliance',
-                'name' => 'Appliance Services',
-                'description' => 'Repairs and installations for ACs, fridges, washing machines, and microwaves.',
-                'icon' => 'Tv',
-                'sort_order' => 7,
-            ],
-            [
-                'slug' => 'outdoor',
-                'name' => 'Outdoor Services',
-                'description' => 'Garden maintenance, lawn mowing, fencing, and pressure washing.',
-                'icon' => 'Trees',
-                'sort_order' => 8,
-            ],
-            [
-                'slug' => 'smart_home',
-                'name' => 'Smart Home & Installation',
-                'description' => 'WiFi, security cameras, smart locks, and automation setups.',
-                'icon' => 'Cpu',
-                'sort_order' => 9,
-            ],
-            [
-                'slug' => 'moving_support',
-                'name' => 'Moving & Support Services',
-                'description' => 'Packing, shifting assistance, and heavy item moving services.',
-                'icon' => 'Truck',
-                'sort_order' => 10,
+                'is_active' => true,
+                'subcategories' => [
+                    'Gardening',
+                    'Security',
+                    'Photography'
+                ]
             ],
         ];
 
-        foreach ($categories as $cat) {
-            ServiceCategory::updateOrCreate(
-                ['slug' => $cat['slug']],
-                [
-                    'name' => $cat['name'],
-                    'description' => $cat['description'],
-                    'icon' => $cat['icon'],
-                    'sort_order' => $cat['sort_order'],
+        foreach ($categories as $catData) {
+            $subcategories = $catData['subcategories'];
+            unset($catData['subcategories']);
+
+            $category = ServiceCategory::create(array_merge($catData, [
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
+
+            foreach ($subcategories as $index => $subName) {
+                ServiceSubCategory::create([
+                    'service_category_id' => $category->id,
+                    'name' => $subName,
+                    'slug' => Str::slug($subName),
+                    'description' => $subName . ' services',
                     'is_active' => true,
-                ]
-            );
+                    'sort_order' => $index + 1,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
         }
     }
 }

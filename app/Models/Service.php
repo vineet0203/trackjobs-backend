@@ -14,6 +14,8 @@ class Service extends Model
         'subtitle',
         'image',
         'category',
+        'sub_category_id',
+        'sub_category',
         'price',
         'location',
         'detailed_address',
@@ -29,5 +31,6 @@ class Service extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'sort_order' => 'integer',
+        'sub_category_id' => 'integer',
     ];
 }

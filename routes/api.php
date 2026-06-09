@@ -32,6 +32,7 @@ use App\Http\Controllers\Api\V1\AI\AIQuoteController;
 use App\Http\Controllers\Api\V1\PublicBookingController;
 use App\Http\Controllers\Api\V1\ServiceCategoryController;
 use App\Http\Controllers\Api\V1\ServiceSubCategoryController;
+use App\Http\Controllers\Api\V1\ServiceController;
 use App\Http\Controllers\Api\MessageController;
 use App\Services\RequestAnalyticsService;
 use Illuminate\Support\Facades\Route;
@@ -95,6 +96,7 @@ Route::prefix('public')->group(function () {
     Route::post('bookings', [PublicBookingController::class, 'store']);
     Route::get('vendors', [PublicBookingController::class, 'getVendors']);
     Route::get('service-categories', [ServiceCategoryController::class, 'index']);
+    Route::get('services', [ServiceController::class, 'index']);
 });
 
 
@@ -162,12 +164,25 @@ Route::middleware(['customer.jwt'])->prefix('customer')->group(function () {
 // ============================================
 Route::middleware(['jwt.verify'])->group(function () {
 
+    // Authenticated Services Route for Vendors
+    Route::get('services', [ServiceController::class, 'index']);
+
     // Service Categories Admin Routes
     Route::middleware(['role:platform_admin'])->prefix('admin/service-categories')->group(function () {
         Route::post('/', [ServiceCategoryController::class, 'store']);
         Route::put('/{id}', [ServiceCategoryController::class, 'update']);
         Route::delete('/{id}', [ServiceCategoryController::class, 'destroy']);
         Route::patch('/{id}/toggle', [ServiceCategoryController::class, 'toggle']);
+    });
+
+    // Services Admin Routes
+    Route::middleware(['role:platform_admin'])->prefix('admin/services')->group(function () {
+        Route::get('/', [ServiceController::class, 'adminIndex']);
+        Route::post('/', [ServiceController::class, 'store']);
+        Route::put('/{id}', [ServiceController::class, 'update']);
+        Route::delete('/{id}', [ServiceController::class, 'destroy']);
+        Route::patch('/{id}/toggle-featured', [ServiceController::class, 'toggleFeatured']);
+        Route::patch('/{id}/toggle-status', [ServiceController::class, 'toggleStatus']);
     });
 
     // Vendor Messaging routes

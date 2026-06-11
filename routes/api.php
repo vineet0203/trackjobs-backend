@@ -185,6 +185,20 @@ Route::middleware(['jwt.verify'])->group(function () {
         Route::patch('/{id}/toggle-status', [ServiceController::class, 'toggleStatus']);
     });
 
+    // Vendor Management Admin Routes
+    Route::middleware(['role:platform_admin'])->prefix('admin/vendors')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'index']);
+        Route::get('/{id}', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'update']);
+        Route::delete('/{id}', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'destroy']);
+        Route::patch('/{id}/toggle-status', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'toggleStatus']);
+        Route::patch('/{id}/reset-password', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'resetPassword']);
+        Route::get('/{id}/employees', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'employees']);
+        Route::get('/{id}/customers', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'customers']);
+        Route::patch('/{id}/employees/{uid}/toggle-status', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'toggleEmployeeStatus']);
+        Route::patch('/{id}/customers/{uid}/toggle-status', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'toggleCustomerStatus']);
+    });
+
     // Vendor Messaging routes
     Route::get('/messages/conversations', [MessageController::class, 'getConversations']);
     Route::get('/messages/{customerId}', [MessageController::class, 'getMessages']);

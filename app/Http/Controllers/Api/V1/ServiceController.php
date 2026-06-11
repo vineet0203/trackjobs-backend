@@ -52,7 +52,10 @@ class ServiceController extends BaseController
             if ($request->filled('search')) {
                 $query->where(function ($q) use ($request) {
                     $q->where('title', 'like', '%' . $request->search . '%')
-                      ->orWhere('subtitle', 'like', '%' . $request->search . '%');
+                      ->orWhere('subtitle', 'like', '%' . $request->search . '%')
+                      ->orWhere('category', 'like', '%' . $request->search . '%')
+                      ->orWhere('location', 'like', '%' . $request->search . '%')
+                      ->orWhere('price', 'like', '%' . $request->search . '%');
                 });
             }
 

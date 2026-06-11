@@ -13,12 +13,14 @@ class ServiceCategory extends Model
         'name',
         'slug',
         'description',
+        'price',
         'icon',
         'is_active',
         'sort_order',
     ];
 
     protected $casts = [
+        'price' => 'float',
         'is_active' => 'boolean',
         'sort_order' => 'integer',
     ];

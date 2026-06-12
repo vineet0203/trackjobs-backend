@@ -12,16 +12,26 @@ use App\Models\Client;
 use App\Models\Quote;
 use App\Models\Job;
 use App\Services\Auth\PasswordService;
+use App\Services\Employee\EmployeeCreationService;
+use App\Services\Employee\EmployeeUpdateService;
+use App\Services\Employee\EmployeeDeletionService;
+use App\Services\Customer\CustomerAccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class VendorManagementController extends BaseController
 {
     public function __construct(
-        private PasswordService $passwordService
+        private PasswordService $passwordService,
+        private EmployeeCreationService $employeeCreationService,
+        private EmployeeUpdateService $employeeUpdateService,
+        private EmployeeDeletionService $employeeDeletionService,
+        private CustomerAccountService $customerAccountService
     ) {}
 
     /**
@@ -196,9 +206,9 @@ class VendorManagementController extends BaseController
 
     /**
      * PATCH /api/v1/admin/vendors/{id}/reset-password
-     * force reset vendor's password, set force_password_change=true
+     * reset vendor's password manually
      */
-    public function resetPassword(int $id): JsonResponse
+    public function resetPassword(Request $request, int $id): JsonResponse
     {
         $vendor = Vendor::find($id);
 
@@ -212,24 +222,30 @@ class VendorManagementController extends BaseController
             return $this->errorResponse('Vendor owner user not found', 400);
         }
 
-        try {
-            // Generate temporary password
-            $result = $this->passwordService->generateAndSetNewPassword($owner, true);
+        $request->validate([
+            'password' => 'required|string|min:8',
+        ]);
 
-            if (!$result['success']) {
-                return $this->errorResponse('Failed to generate new password', 500);
+        $newPassword = $request->input('password');
+
+        try {
+            // Update password using PasswordService
+            $result = $this->passwordService->updatePasswordWithHistory($owner, $newPassword, 'admin_reset');
+
+            if (!$result) {
+                return $this->errorResponse('Failed to set new password', 500);
             }
 
-            $newPassword = $result['password'];
+            // Explicitly force password change to false so they login directly
+            $owner->force_password_change = false;
+            $owner->save();
 
             // Send email
-            Mail::raw("Hello,\n\nAn administrator has reset your password for TrakJobs.\nYour new temporary password is: {$newPassword}\n\nYou will be required to change your password upon your next login.", function ($message) use ($owner) {
+            Mail::raw("Hello,\n\nAn administrator has manually reset your password for TrakJobs.\nYour new password is: {$newPassword}\n\nYou can log in directly using this new password.", function ($message) use ($owner) {
                 $message->to($owner->email)->subject('TrakJobs - Admin Password Reset');
             });
 
-            return $this->successResponse([
-                'new_password' => $newPassword
-            ], 'Password reset successfully and email sent');
+            return $this->successResponse(null, 'Password updated successfully and email sent');
         } catch (\Exception $e) {
             Log::error('Failed to reset vendor password', ['id' => $id, 'error' => $e->getMessage()]);
             return $this->errorResponse('Failed to reset password: ' . $e->getMessage(), 500);
@@ -314,5 +330,310 @@ class VendorManagementController extends BaseController
         $customer->update(['status' => $newStatus]);
 
         return $this->successResponse($customer, 'Customer status updated successfully');
+    }
+
+    /**
+     * POST /api/v1/admin/vendors/{id}/employees
+     * add new employee for vendor
+     */
+    public function addEmployee(Request $request, int $id): JsonResponse
+    {
+        $vendor = Vendor::find($id);
+        if (!$vendor) {
+            return $this->notFoundResponse('Vendor not found');
+        }
+
+        $request->validate([
+            'first_name' => 'required|string|max:191',
+            'last_name' => 'nullable|string|max:191',
+            'email' => 'required|email|max:191',
+            'mobile_number' => 'required|string|max:20',
+            'designation' => 'required|string|max:191',
+            'department' => 'required|string|max:191',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        try {
+            // Check cross-role email conflict (Customer)
+            if (DB::table('customers')->where('email', $request->input('email'))->exists()) {
+                return $this->errorResponse('This email is already registered as a Customer.', 422);
+            }
+
+            // Check duplicate employee email for this vendor
+            if (Employee::where('vendor_id', $id)->where('email', $request->input('email'))->exists()) {
+                return $this->errorResponse('An employee with this email already exists for this vendor.', 422);
+            }
+
+            $data = $request->all();
+            $data['vendor_id'] = $id;
+            $data['is_active'] = $request->boolean('is_active', true);
+
+            $employee = $this->employeeCreationService->create($data, auth()->id());
+
+            // Generate password setup token
+            $plainToken = Str::random(60);
+            DB::table('password_reset_tokens')->updateOrInsert(
+                ['email' => $employee->email],
+                [
+                    'token' => Hash::make($plainToken),
+                    'created_at' => now(),
+                ]
+            );
+
+            $employeeAppUrl = rtrim(env('EMPLOYEE_FRONTEND_URL', 'http://localhost:5174'), '/');
+            $setupLink = $employeeAppUrl . '/set-password?email=' . urlencode($employee->email) . '&token=' . urlencode($plainToken);
+
+            $emailSent = true;
+            try {
+                Mail::send('emails.reset_password', [
+                    'name' => trim(($employee->first_name ?? '') . ' ' . ($employee->last_name ?? '')) ?: ($employee->name ?? 'Employee'),
+                    'resetUrl' => $setupLink,
+                ], function ($message) use ($employee) {
+                    $message->to($employee->email)
+                        ->subject('Set your password - ' . config('app.name', 'TrackJobs'));
+                });
+            } catch (\Throwable $mailException) {
+                $emailSent = false;
+            }
+
+            return $this->successResponse($employee, $emailSent 
+                ? 'Employee added successfully. Password setup email sent.' 
+                : 'Employee added successfully, but password setup email could not be sent.');
+        } catch (\Exception $e) {
+            Log::error('Admin failed to add employee', ['vendor_id' => $id, 'error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to add employee: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * PUT /api/v1/admin/vendors/{id}/employees/{uid}
+     * update employee details
+     */
+    public function updateEmployee(Request $request, int $id, int $uid): JsonResponse
+    {
+        $employee = Employee::where('vendor_id', $id)->where('id', $uid)->first();
+        if (!$employee) {
+            return $this->notFoundResponse('Employee not found');
+        }
+
+        $request->validate([
+            'first_name' => 'required|string|max:191',
+            'last_name' => 'nullable|string|max:191',
+            'email' => 'required|email|max:191',
+            'mobile_number' => 'required|string|max:20',
+            'designation' => 'required|string|max:191',
+            'department' => 'required|string|max:191',
+            'is_active' => 'nullable|boolean',
+        ]);
+
+        try {
+            // Check duplicate email (excluding current employee)
+            $emailExists = Employee::where('vendor_id', $id)
+                ->where('email', $request->input('email'))
+                ->where('id', '!=', $uid)
+                ->exists();
+
+            if ($emailExists) {
+                return $this->errorResponse('Another employee with this email already exists.', 422);
+            }
+
+            $data = $request->all();
+            $data['is_active'] = $request->boolean('is_active', $employee->is_active);
+
+            $updatedEmployee = $this->employeeUpdateService->update($employee, $data, auth()->id());
+
+            return $this->successResponse($updatedEmployee, 'Employee updated successfully');
+        } catch (\Exception $e) {
+            Log::error('Admin failed to update employee', ['employee_id' => $uid, 'error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to update employee: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * DELETE /api/v1/admin/vendors/{id}/employees/{uid}
+     * delete employee
+     */
+    public function deleteEmployee(int $id, int $uid): JsonResponse
+    {
+        $employee = Employee::where('vendor_id', $id)->where('id', $uid)->first();
+        if (!$employee) {
+            return $this->notFoundResponse('Employee not found');
+        }
+
+        try {
+            $canDelete = $this->employeeDeletionService->canDelete($employee);
+            if (!$canDelete['can_delete']) {
+                return $this->errorResponse($canDelete['message'], 409);
+            }
+
+            $this->employeeDeletionService->softDelete($employee, auth()->id());
+
+            return $this->successResponse(null, 'Employee deleted successfully');
+        } catch (\Exception $e) {
+            Log::error('Admin failed to delete employee', ['employee_id' => $uid, 'error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to delete employee: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * POST /api/v1/admin/vendors/{id}/customers
+     * add new customer and link to vendor
+     */
+    public function addCustomer(Request $request, int $id): JsonResponse
+    {
+        $vendor = Vendor::find($id);
+        if (!$vendor) {
+            return $this->notFoundResponse('Vendor not found');
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:191',
+            'email' => 'required|email|max:191',
+            'phone' => 'required|string|max:20',
+            'status' => 'nullable|in:active,inactive',
+        ]);
+
+        try {
+            // Check cross-role email conflict (Employee)
+            if (DB::table('employees')->where('email', $request->input('email'))->exists()) {
+                return $this->errorResponse('This email is already registered as an Employee.', 422);
+            }
+
+            // Check if customer already exists
+            $customer = Customer::where('email', $request->input('email'))->first();
+            if (!$customer) {
+                // Create customer using CustomerAccountService
+                $result = $this->customerAccountService->createCustomer([
+                    'name' => $request->input('name'),
+                    'email' => $request->input('email'),
+                    'phone' => $request->input('phone'),
+                    'status' => $request->input('status', 'active'),
+                ]);
+                $customer = $result['customer'];
+                $emailSent = $result['email_sent'];
+            } else {
+                $emailSent = false;
+            }
+
+            // Create/find Client link to associate customer with this vendor
+            $client = Client::withTrashed()
+                ->where('vendor_id', $id)
+                ->where('email', $request->input('email'))
+                ->first();
+
+            if ($client) {
+                if ($client->trashed()) {
+                    $client->restore();
+                }
+                $client->update([
+                    'first_name' => $request->input('name'),
+                    'mobile_number' => $request->input('phone'),
+                    'status' => $request->input('status', 'active'),
+                ]);
+            } else {
+                Client::create([
+                    'vendor_id' => $id,
+                    'first_name' => $request->input('name'),
+                    'email' => $request->input('email'),
+                    'mobile_number' => $request->input('phone'),
+                    'status' => $request->input('status', 'active'),
+                    'client_type' => 'residential',
+                ]);
+            }
+
+            return $this->successResponse($customer, $emailSent 
+                ? 'Customer created successfully and linked to vendor. Setup email sent.' 
+                : 'Customer linked to vendor successfully.');
+        } catch (\Exception $e) {
+            Log::error('Admin failed to add customer', ['vendor_id' => $id, 'error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to add customer: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * PUT /api/v1/admin/vendors/{id}/customers/{uid}
+     * update customer details
+     */
+    public function updateCustomer(Request $request, int $id, int $uid): JsonResponse
+    {
+        $customer = Customer::find($uid);
+        if (!$customer) {
+            return $this->notFoundResponse('Customer not found');
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:191',
+            'email' => 'required|email|max:191',
+            'phone' => 'required|string|max:20',
+            'status' => 'nullable|in:active,inactive',
+        ]);
+
+        try {
+            // Check unique email excluding current customer
+            $emailExists = Customer::where('email', $request->input('email'))
+                ->where('id', '!=', $uid)
+                ->exists();
+
+            if ($emailExists) {
+                return $this->errorResponse('Another customer with this email already exists.', 422);
+            }
+
+            // Check if Client link exists for this vendor and customer
+            $client = Client::where('vendor_id', $id)
+                ->where('email', $customer->email)
+                ->first();
+
+            if (!$client) {
+                return $this->errorResponse('Customer is not associated with this vendor', 400);
+            }
+
+            // Update Customer
+            $customer->update([
+                'name' => $request->input('name'),
+                'email' => $request->input('email'),
+                'phone' => $request->input('phone'),
+                'status' => $request->input('status', $customer->status),
+            ]);
+
+            // Update Client
+            $client->update([
+                'first_name' => $request->input('name'),
+                'email' => $request->input('email'),
+                'mobile_number' => $request->input('phone'),
+                'status' => $request->input('status', 'active'),
+            ]);
+
+            return $this->successResponse($customer, 'Customer updated successfully');
+        } catch (\Exception $e) {
+            Log::error('Admin failed to update customer', ['customer_id' => $uid, 'error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to update customer: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * DELETE /api/v1/admin/vendors/{id}/customers/{uid}
+     * disassociate customer from vendor
+     */
+    public function deleteCustomer(int $id, int $uid): JsonResponse
+    {
+        $customer = Customer::find($uid);
+        if (!$customer) {
+            return $this->notFoundResponse('Customer not found');
+        }
+
+        try {
+            $client = Client::where('vendor_id', $id)
+                ->where('email', $customer->email)
+                ->first();
+
+            if ($client) {
+                $client->delete();
+            }
+
+            return $this->successResponse(null, 'Customer disassociated from vendor successfully');
+        } catch (\Exception $e) {
+            Log::error('Admin failed to delete customer', ['customer_id' => $uid, 'error' => $e->getMessage()]);
+            return $this->errorResponse('Failed to delete customer: ' . $e->getMessage(), 500);
+        }
     }
 }

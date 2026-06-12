@@ -193,9 +193,19 @@ Route::middleware(['jwt.verify'])->group(function () {
         Route::delete('/{id}', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'destroy']);
         Route::patch('/{id}/toggle-status', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'toggleStatus']);
         Route::patch('/{id}/reset-password', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'resetPassword']);
+        
+        // Employee Management
         Route::get('/{id}/employees', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'employees']);
-        Route::get('/{id}/customers', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'customers']);
+        Route::post('/{id}/employees', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'addEmployee']);
+        Route::put('/{id}/employees/{uid}', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'updateEmployee']);
+        Route::delete('/{id}/employees/{uid}', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'deleteEmployee']);
         Route::patch('/{id}/employees/{uid}/toggle-status', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'toggleEmployeeStatus']);
+        
+        // Customer Management
+        Route::get('/{id}/customers', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'customers']);
+        Route::post('/{id}/customers', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'addCustomer']);
+        Route::put('/{id}/customers/{uid}', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'updateCustomer']);
+        Route::delete('/{id}/customers/{uid}', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'deleteCustomer']);
         Route::patch('/{id}/customers/{uid}/toggle-status', [\App\Http\Controllers\Api\V1\Admin\VendorManagementController::class, 'toggleCustomerStatus']);
     });
 

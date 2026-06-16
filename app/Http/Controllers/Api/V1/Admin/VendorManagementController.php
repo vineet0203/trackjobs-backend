@@ -191,7 +191,9 @@ class VendorManagementController extends BaseController
                 User::whereIn('id', $userIds)->update([
                     'is_active' => true,
                     'status' => 'active',
-                    'reactivated_at' => now()
+                    'reactivated_at' => now(),
+                    'failed_login_attempts' => 0,
+                    'account_locked_until' => null
                 ]);
             }
 

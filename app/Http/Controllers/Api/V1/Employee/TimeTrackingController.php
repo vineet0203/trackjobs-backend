@@ -455,16 +455,9 @@ class TimeTrackingController extends BaseController
         $monthSeconds = $this->sumStoredSeconds($employeeId, $monthStart, $now);
 
         if ($activeEntry && !$activeEntry->check_out) {
-            $liveSeconds = $this->activeWorkedSeconds($activeEntry);
-            if ($activeEntry->check_in && $activeEntry->check_in->gte($todayStart)) {
-                $todaySeconds += $liveSeconds;
-            }
-            if ($activeEntry->check_in && $activeEntry->check_in->gte($weekStart)) {
-                $weekSeconds += $liveSeconds;
-            }
-            if ($activeEntry->check_in && $activeEntry->check_in->gte($monthStart)) {
-                $monthSeconds += $liveSeconds;
-            }
+            $todaySeconds += $this->activeWorkedSecondsForPeriod($activeEntry, $todayStart, $now);
+            $weekSeconds += $this->activeWorkedSecondsForPeriod($activeEntry, $weekStart, $now);
+            $monthSeconds += $this->activeWorkedSecondsForPeriod($activeEntry, $monthStart, $now);
         }
 
         return [
@@ -479,6 +472,42 @@ class TimeTrackingController extends BaseController
         return (int) TimeEntry::where('employee_id', $employeeId)
             ->whereBetween('check_in', [$from, $to])
             ->sum('total_time');
+    }
+
+    private function activeWorkedSecondsForPeriod(TimeEntry $entry, Carbon $periodStart, Carbon $periodEnd): int
+    {
+        if (!$entry->check_in) {
+            return 0;
+        }
+
+        $checkIn = $entry->check_in;
+        if ($checkIn->greaterThanOrEqualTo($periodEnd)) {
+            return 0;
+        }
+
+        $start = $checkIn->greaterThan($periodStart) ? $checkIn : $periodStart;
+        $end = $periodEnd;
+
+        // Base worked seconds (before subtracting breaks)
+        $baseSeconds = max(0, $start->diffInSeconds($end));
+
+        $entry->loadMissing('breaks');
+
+        $breakSecondsInPeriod = 0;
+        foreach ($entry->breaks as $break) {
+            $breakStart = $break->break_start;
+            $breakEnd = $break->break_end ?: $end;
+
+            // Find overlap of [$breakStart, $breakEnd] with [$start, $end]
+            $overlapStart = $breakStart->greaterThan($start) ? $breakStart : $start;
+            $overlapEnd = $breakEnd->lessThan($end) ? $breakEnd : $end;
+
+            if ($overlapStart->lessThan($overlapEnd)) {
+                $breakSecondsInPeriod += $overlapStart->diffInSeconds($overlapEnd);
+            }
+        }
+
+        return max(0, $baseSeconds - $breakSecondsInPeriod);
     }
 
     private function activeWorkedSeconds(TimeEntry $entry): int
@@ -508,6 +537,10 @@ class TimeTrackingController extends BaseController
 
         if (in_array($normalized, ['scheduled', 'in_progress', 'completed'], true)) {
             return 'approved';
+        }
+
+        if (in_array($normalized, ['cancelled', 'archived', 'on_hold', 'pending'], true)) {
+            return $normalized;
         }
 
         return 'pending';
